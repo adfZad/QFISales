@@ -29,6 +29,10 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 app.UseCors("AllowFrontend");
 
+// Serve frontend static files
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // ==========================================================================
 // CENTRAL CONFIGURATION & CONSTANTS FOR SQL DATABASE TABLES
 // ==========================================================================
