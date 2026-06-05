@@ -1,0 +1,125 @@
+D:\Gravity\New folder\backend\bin\Debug\net10.0\appsettings.Development.json
+D:\Gravity\New folder\backend\bin\Debug\net10.0\appsettings.json
+D:\Gravity\New folder\backend\bin\Debug\net10.0\SalesOrderApi.staticwebassets.endpoints.json
+D:\Gravity\New folder\backend\bin\Debug\net10.0\SalesOrderApi.exe
+D:\Gravity\New folder\backend\bin\Debug\net10.0\SalesOrderApi.deps.json
+D:\Gravity\New folder\backend\bin\Debug\net10.0\SalesOrderApi.runtimeconfig.json
+D:\Gravity\New folder\backend\bin\Debug\net10.0\SalesOrderApi.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\SalesOrderApi.pdb
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.Bcl.Cryptography.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.Data.SqlClient.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.Data.SqlClient.Extensions.Abstractions.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.Data.SqlClient.Internal.Logging.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Abstractions.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.IdentityModel.JsonWebTokens.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Logging.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Tokens.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\Microsoft.SqlServer.Server.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\System.Configuration.ConfigurationManager.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\System.IdentityModel.Tokens.Jwt.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\System.Security.Cryptography.ProtectedData.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\cs\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\de\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\es\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\fr\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\it\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\ja\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\ko\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\pl\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\pt-BR\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\ru\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\tr\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\zh-Hans\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\zh-Hant\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\runtimes\unix\lib\net9.0\Microsoft.Data.SqlClient.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\runtimes\win\lib\net9.0\Microsoft.Data.SqlClient.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\runtimes\win-arm64\native\Microsoft.Data.SqlClient.SNI.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\runtimes\win-x64\native\Microsoft.Data.SqlClient.SNI.dll
+D:\Gravity\New folder\backend\bin\Debug\net10.0\runtimes\win-x86\native\Microsoft.Data.SqlClient.SNI.dll
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.csproj.AssemblyReference.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\rpswa.dswa.cache.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.GeneratedMSBuildEditorConfig.editorconfig
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.AssemblyInfoInputs.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.AssemblyInfo.cs
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.csproj.CoreCompileInputs.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.MvcApplicationPartsAssemblyInfo.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\rjimswa.dswa.cache.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\rjsmrazor.dswa.cache.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\rjsmcshtml.dswa.cache.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\scopedcss\bundle\SalesOrderApi.styles.css
+D:\Gravity\New folder\backend\obj\Debug\net10.0\staticwebassets.build.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\staticwebassets.build.json.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\staticwebassets.development.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\staticwebassets.build.endpoints.json
+D:\Gravity\New folder\backend\obj\Debug\net10.0\swae.build.ex.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrd.90FFC352.Up2Date
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.dll
+D:\Gravity\New folder\backend\obj\Debug\net10.0\refint\SalesOrderApi.dll
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.pdb
+D:\Gravity\New folder\backend\obj\Debug\net10.0\SalesOrderApi.genruntimeconfig.cache
+D:\Gravity\New folder\backend\obj\Debug\net10.0\ref\SalesOrderApi.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\appsettings.Development.json
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\appsettings.json
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\SalesOrderApi.staticwebassets.endpoints.json
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\SalesOrderApi.exe
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\SalesOrderApi.deps.json
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\SalesOrderApi.runtimeconfig.json
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\SalesOrderApi.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\SalesOrderApi.pdb
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.Bcl.Cryptography.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.Data.SqlClient.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.Data.SqlClient.Extensions.Abstractions.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.Data.SqlClient.Internal.Logging.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Abstractions.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.IdentityModel.JsonWebTokens.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Logging.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.IdentityModel.Tokens.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\Microsoft.SqlServer.Server.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\System.Configuration.ConfigurationManager.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\System.IdentityModel.Tokens.Jwt.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\System.Security.Cryptography.ProtectedData.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\cs\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\de\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\es\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\fr\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\it\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\ja\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\ko\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\pl\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\pt-BR\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\ru\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\tr\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\zh-Hans\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\zh-Hant\Microsoft.Data.SqlClient.resources.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\runtimes\unix\lib\net9.0\Microsoft.Data.SqlClient.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\runtimes\win\lib\net9.0\Microsoft.Data.SqlClient.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\runtimes\win-arm64\native\Microsoft.Data.SqlClient.SNI.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\runtimes\win-x64\native\Microsoft.Data.SqlClient.SNI.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\runtimes\win-x86\native\Microsoft.Data.SqlClient.SNI.dll
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.csproj.AssemblyReference.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\rpswa.dswa.cache.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.GeneratedMSBuildEditorConfig.editorconfig
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.AssemblyInfoInputs.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.AssemblyInfo.cs
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.csproj.CoreCompileInputs.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.MvcApplicationPartsAssemblyInfo.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\rjimswa.dswa.cache.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\rjsmrazor.dswa.cache.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\rjsmcshtml.dswa.cache.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\scopedcss\bundle\SalesOrderApi.styles.css
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\staticwebassets.build.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\staticwebassets.build.json.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\staticwebassets.development.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\staticwebassets.build.endpoints.json
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\swae.build.ex.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrd.90FFC352.Up2Date
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.dll
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\refint\SalesOrderApi.dll
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.pdb
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\SalesOrderApi.genruntimeconfig.cache
+D:\Gravity\SOMS\backend\obj\Debug\net10.0\ref\SalesOrderApi.dll
+D:\Gravity\SOMS\backend\bin\Debug\net10.0\appsettings.Production.json
