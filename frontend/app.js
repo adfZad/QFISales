@@ -3,7 +3,7 @@
    ========================================================================== */
 
 // 1. DYNAMIC API CONFIGURATION
-const API_BASE_URL = "/api";
+const API_BASE_URL = (window.location.protocol === 'file:' || window.location.hostname === '127.0.0.1') ? "http://localhost:5000/api" : "/api";
 let isBackendConnected = false;
 
 // Offline Fallback Masters (Used if backend server is unreachable)
@@ -402,7 +402,15 @@ function setupEventListeners() {
             const rowGroup = row.dataset.group || "";
             
             const matchesSearch = desc.includes(query) || code.includes(query);
-            const matchesGroup = group === "" || rowGroup === group;
+            
+            let matchesGroup = true;
+            if (group === "_SELECTED_ITEMS_") {
+                const qty = parseInt(row.querySelector(".qty-input").value) || 0;
+                const foc = parseInt(row.querySelector(".foc-input").value) || 0;
+                matchesGroup = (qty > 0 || foc > 0);
+            } else {
+                matchesGroup = group === "" || rowGroup === group;
+            }
             
             if (matchesSearch && matchesGroup) {
                 row.style.display = "";
@@ -455,7 +463,7 @@ function renderMaterialFormRows() {
     
     if (materialGroupFilter && MATERIAL_MASTER.length > 0) {
         const currentSelection = materialGroupFilter.value;
-        materialGroupFilter.innerHTML = '<option value="">All Groups</option>';
+        materialGroupFilter.innerHTML = '<option value="">All Groups</option><option value="_SELECTED_ITEMS_">Selected Items</option>';
         const groups = [...new Set(MATERIAL_MASTER.map(m => m.group).filter(g => g))].sort();
         groups.forEach(g => {
             const opt = document.createElement("option");
@@ -481,13 +489,16 @@ function renderMaterialFormRows() {
             <td class="col-code text-center">${material.code}</td>
             <td class="col-pack text-center">${material.packing}</td>
             <td class="col-qty">
-                <input type="number" min="0" class="form-control qty-input" placeholder="0" data-no="${material.no}">
+                <input type="number" min="0" class="form-control qty-input" style="text-align: center;" placeholder="0" data-no="${material.no}">
             </td>
             <td class="col-foc">
-                <input type="number" min="0" class="form-control foc-input" placeholder="0" data-no="${material.no}">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <input type="checkbox" class="foc-enable-chk" data-no="${material.no}" title="Enable FOC">
+                    <input type="number" min="0" class="form-control foc-input" style="text-align: center;" placeholder="0" data-no="${material.no}" readonly>
+                </div>
             </td>
             <td class="col-price">
-                <input type="number" min="0" step="0.01" class="form-control price-input" 
+                <input type="number" min="0" step="0.01" class="form-control price-input" style="text-align: center;"
                        value="${material.defaultPrice > 0 ? material.defaultPrice : ''}" 
                        placeholder="0.00" data-no="${material.no}">
             </td>
@@ -500,6 +511,18 @@ function renderMaterialFormRows() {
         const qtyIn = row.querySelector(".qty-input");
         const focIn = row.querySelector(".foc-input");
         const priceIn = row.querySelector(".price-input");
+        const focChk = row.querySelector(".foc-enable-chk");
+        
+        focChk.addEventListener("change", (e) => {
+            if (e.target.checked) {
+                focIn.removeAttribute("readonly");
+                focIn.focus();
+            } else {
+                focIn.setAttribute("readonly", "readonly");
+                focIn.value = "";
+                calculateRowAndFormTotals(material.no);
+            }
+        });
         
         [qtyIn, focIn, priceIn].forEach(input => {
             input.addEventListener("input", () => calculateRowAndFormTotals(material.no));
@@ -776,6 +799,8 @@ function resetForm() {
     
     const today = new Date().toISOString().split('T')[0];
     orderDateInput.value = today;
+    document.getElementById("requiredDate").value = today;
+    document.getElementById("referenceNumber").value = "";
     customerCodeInput.value = "";
     salesPersonInput.value = localStorage.getItem("loggedSalespersonName") || "";
     salesPNCodeInput.value = localStorage.getItem("loggedSalespersonCode") || "";
@@ -783,7 +808,10 @@ function resetForm() {
     MATERIAL_MASTER.forEach(m => {
         const r = document.getElementById(`row-${m.no}`);
         r.querySelector(".qty-input").value = "";
-        r.querySelector(".foc-input").value = "";
+        const focIn = r.querySelector(".foc-input");
+        focIn.value = "";
+        focIn.setAttribute("readonly", "readonly");
+        r.querySelector(".foc-enable-chk").checked = false;
         r.querySelector(".remarks-input").value = "";
         r.querySelector(".price-input").value = m.defaultPrice > 0 ? m.defaultPrice : "";
         r.classList.remove("active-row");
@@ -863,10 +891,9 @@ function renderOrdersList(orderList) {
     
     if (loggedUserType === 'supervisor') {
         pendingOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() === 'pending' && o.approver && o.approver.trim() === loggedSalespersonCode);
-        mainOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() !== 'rejected' && !(o.status.trim().toLowerCase() === 'pending' && o.approver && o.approver.trim() === loggedSalespersonCode));
-    } else {
-        mainOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() !== 'rejected');
     }
+    
+    mainOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() !== 'rejected' && o.status.trim().toLowerCase() !== 'pending');
     
     if (returnedOrders.length > 0) {
         document.getElementById("returnedOrdersCard").style.display = "block";
@@ -976,6 +1003,8 @@ async function handleFormSubmit(e) {
     const custCode = customerCodeInput.value.trim();
     const paymentMode = document.querySelector('input[name="paymentMode"]:checked').value;
     const oDate = orderDateInput.value;
+    const requiredDate = document.getElementById("requiredDate").value;
+    const referenceNumber = document.getElementById("referenceNumber").value.trim();
     const salesPerson = salesPersonInput.value.trim();
     const salesPNCode = salesPNCodeInput.value.trim();
     
@@ -1024,6 +1053,8 @@ async function handleFormSubmit(e) {
     const isCredit = paymentMode === "CREDIT";
     const orderPayload = {
         date: oDate,
+        requiredDate: requiredDate,
+        referenceNumber: referenceNumber,
         customerName: custName,
         customerCode: custCode,
         paymentMode: paymentMode,
@@ -1162,6 +1193,8 @@ async function editOrder(orderId) {
     currentEditingId = order.id;
     
     orderDateInput.value = order.date;
+    document.getElementById("requiredDate").value = order.requiredDate || order.date;
+    document.getElementById("referenceNumber").value = order.referenceNumber || "";
     customerNameInput.value = order.customerName;
     customerCodeInput.value = order.customerCode;
     salesPersonInput.value = order.salesPerson || "Jawed Akthar";
@@ -1176,7 +1209,10 @@ async function editOrder(orderId) {
     MATERIAL_MASTER.forEach(m => {
         const r = document.getElementById(`row-${m.no}`);
         r.querySelector(".qty-input").value = "";
-        r.querySelector(".foc-input").value = "";
+        const focIn = r.querySelector(".foc-input");
+        focIn.value = "";
+        focIn.setAttribute("readonly", "readonly");
+        r.querySelector(".foc-enable-chk").checked = false;
         r.querySelector(".remarks-input").value = "";
         r.querySelector(".price-input").value = m.defaultPrice > 0 ? m.defaultPrice : "";
         r.classList.remove("active-row");
@@ -1187,7 +1223,17 @@ async function editOrder(orderId) {
         const r = document.getElementById(`row-${item.no}`);
         if (r) {
             r.querySelector(".qty-input").value = item.qty || "";
-            r.querySelector(".foc-input").value = item.foc || "";
+            const focIn = r.querySelector(".foc-input");
+            const focChk = r.querySelector(".foc-enable-chk");
+            if (item.foc > 0) {
+                focChk.checked = true;
+                focIn.removeAttribute("readonly");
+                focIn.value = item.foc;
+            } else {
+                focChk.checked = false;
+                focIn.setAttribute("readonly", "readonly");
+                focIn.value = "";
+            }
             r.querySelector(".price-input").value = item.unitPrice;
             r.querySelector(".remarks-input").value = item.remarks || "";
             r.classList.add("active-row");
@@ -1227,11 +1273,16 @@ async function viewOrderDetails(orderId) {
     const dateParts = order.date.split("-");
     const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : order.date;
     
+    const reqDateParts = (order.requiredDate || order.date).split("-");
+    const formattedReqDate = reqDateParts.length === 3 ? `${reqDateParts[2]}/${reqDateParts[1]}/${reqDateParts[0]}` : (order.requiredDate || order.date);
+    
     viewCustomerName.textContent = order.customerName;
     viewCustomerCode.textContent = order.customerCode;
     viewPaymentMode.textContent = order.paymentMode;
     viewMemoNumber.textContent = order.memoNumber;
     viewOrderDate.textContent = formattedDate;
+    document.getElementById("viewRequiredDate").textContent = formattedReqDate;
+    document.getElementById("viewReferenceNumber").textContent = order.referenceNumber || "-";
     viewSalesPerson.textContent = order.salesPerson || "Jawed Akthar";
     viewSalesPNCode.textContent = order.salesPNCode || "100302";
     

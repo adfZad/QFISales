@@ -406,7 +406,7 @@ app.MapGet("/api/orders", async (HttpContext context) =>
             {
                 await conn.OpenAsync();
                 // Fetch OrderHeaders from database
-                string sql = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason FROM OrderHeader";
+                string sql = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason, RequiredDate, ReferenceNumber FROM OrderHeader";
                 if (!string.IsNullOrEmpty(salesPersonCode))
                 {
                     if (userType == "Supervisor")
@@ -439,7 +439,9 @@ app.MapGet("/api/orders", async (HttpContext context) =>
                         IsCreditVerified = Convert.ToBoolean(reader["IsCreditVerified"]),
                         Approver = reader["Approver"]?.ToString(),
                         Status = reader["Status"]?.ToString() ?? "Pending",
-                        RejectReason = reader["RejectReason"]?.ToString()
+                        RejectReason = reader["RejectReason"]?.ToString(),
+                        RequiredDate = reader["RequiredDate"] != DBNull.Value ? Convert.ToDateTime(reader["RequiredDate"]).ToString("yyyy-MM-dd") : "",
+                        ReferenceNumber = reader["ReferenceNumber"]?.ToString() ?? ""
                     });
                 }
             }
@@ -470,7 +472,7 @@ app.MapGet("/api/orders/{id}", async (string id) =>
                 await conn.OpenAsync();
                 
                 // Fetch Header
-                string sqlHeader = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason FROM OrderHeader WHERE OrderID = @id";
+                string sqlHeader = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason, RequiredDate, ReferenceNumber FROM OrderHeader WHERE OrderID = @id";
                 using (var cmdHeader = new SqlCommand(sqlHeader, conn))
                 {
                     cmdHeader.Parameters.AddWithValue("@id", numericId);
@@ -494,6 +496,8 @@ app.MapGet("/api/orders/{id}", async (string id) =>
                             Approver = reader["Approver"]?.ToString(),
                             Status = reader["Status"]?.ToString() ?? "Pending",
                             RejectReason = reader["RejectReason"]?.ToString(),
+                            RequiredDate = reader["RequiredDate"] != DBNull.Value ? Convert.ToDateTime(reader["RequiredDate"]).ToString("yyyy-MM-dd") : "",
+                            ReferenceNumber = reader["ReferenceNumber"]?.ToString() ?? "",
                             Items = new List<OrderItemDto>()
                         };
                     }
@@ -598,9 +602,9 @@ app.MapPost("/api/orders", async (OrderDto newOrder) =>
 
                     // 3. Insert Header
                     string sqlHeader = @"
-                        INSERT INTO OrderHeader (OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, CreatedTime, Approver, Status)
+                        INSERT INTO OrderHeader (OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, CreatedTime, Approver, Status, RequiredDate, ReferenceNumber)
                         OUTPUT INSERTED.OrderID
-                        VALUES (@num, @date, @custName, @custCode, @pay, @sales, @pn, @qty, @foc, @amt, @verified, GETDATE(), @approver, 'Pending')";
+                        VALUES (@num, @date, @custName, @custCode, @pay, @sales, @pn, @qty, @foc, @amt, @verified, GETDATE(), @approver, 'Pending', @reqDate, @refNum)";
                     
                     int newOrderId = 0;
                     using (var cmd = new SqlCommand(sqlHeader, conn, trans))
@@ -617,6 +621,8 @@ app.MapPost("/api/orders", async (OrderDto newOrder) =>
                         cmd.Parameters.AddWithValue("@amt", newOrder.TotalAmount);
                         cmd.Parameters.AddWithValue("@verified", newOrder.PaymentMode == "CREDIT");
                         cmd.Parameters.AddWithValue("@approver", string.IsNullOrEmpty(approverCode) ? DBNull.Value : approverCode);
+                        cmd.Parameters.AddWithValue("@reqDate", string.IsNullOrEmpty(newOrder.RequiredDate) ? DBNull.Value : DateTime.Parse(newOrder.RequiredDate));
+                        cmd.Parameters.AddWithValue("@refNum", string.IsNullOrEmpty(newOrder.ReferenceNumber) ? DBNull.Value : newOrder.ReferenceNumber);
 
                         newOrderId = (int)(await cmd.ExecuteScalarAsync() ?? 0);
                     }
@@ -737,7 +743,8 @@ app.MapPut("/api/orders/{id}", async (string id, OrderDto updatedOrder) =>
                             TotalQty = @qty, TotalFOC = @foc, TotalAmount = @amt, 
                             IsCreditVerified = @verified, ModifiedTime = GETDATE(),
                             Status = CASE WHEN Status = 'Rejected' THEN 'Pending' ELSE Status END,
-                            RejectReason = CASE WHEN Status = 'Rejected' THEN NULL ELSE RejectReason END
+                            RejectReason = CASE WHEN Status = 'Rejected' THEN NULL ELSE RejectReason END,
+                            RequiredDate = @reqDate, ReferenceNumber = @refNum
                         WHERE OrderID = @id";
                     
                     using (var cmd = new SqlCommand(sqlHeader, conn, trans))
@@ -753,6 +760,8 @@ app.MapPut("/api/orders/{id}", async (string id, OrderDto updatedOrder) =>
                         cmd.Parameters.AddWithValue("@foc", updatedOrder.TotalFoc);
                         cmd.Parameters.AddWithValue("@amt", updatedOrder.TotalAmount);
                         cmd.Parameters.AddWithValue("@verified", updatedOrder.PaymentMode == "CREDIT");
+                        cmd.Parameters.AddWithValue("@reqDate", string.IsNullOrEmpty(updatedOrder.RequiredDate) ? DBNull.Value : DateTime.Parse(updatedOrder.RequiredDate));
+                        cmd.Parameters.AddWithValue("@refNum", string.IsNullOrEmpty(updatedOrder.ReferenceNumber) ? DBNull.Value : updatedOrder.ReferenceNumber);
 
                         int rows = await cmd.ExecuteNonQueryAsync();
                         if (rows == 0) return Results.NotFound($"Order with ID {id} not found in database.");
@@ -1102,6 +1111,8 @@ public class OrderDto
     public string? Approver { get; set; }
     public string Status { get; set; } = "Pending";
     public string? RejectReason { get; set; }
+    public string RequiredDate { get; set; } = "";
+    public string ReferenceNumber { get; set; } = "";
     public List<OrderItemDto> Items { get; set; } = new();
 }
 

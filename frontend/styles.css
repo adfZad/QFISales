@@ -375,13 +375,35 @@ tbody tr:hover {
 .material-table .col-code { width: 90px; text-align: center; }
 .material-table .col-pack { width: 110px; text-align: center; }
 .material-table .col-qty { width: 100px; }
-.material-table .col-foc { width: 90px; }
+.material-table .col-foc { width: 130px; }
 .material-table .col-price { width: 110px; }
 .material-table .col-total { width: 120px; text-align: right; font-weight: 600; }
 .material-table .col-remarks { width: 180px; }
 
-.material-table input.qty-input, 
-.material-table input.foc-input,
+.material-table input.qty-input {
+    width: 70px;
+    text-align: center;
+    padding: 6px;
+    border-radius: 4px;
+}
+
+.material-table input.foc-input {
+    width: 70px;
+    text-align: center;
+    padding: 6px;
+    border-radius: 4px;
+    color: #e67e22;
+    font-weight: 700;
+    background-color: #fff9f2;
+}
+
+.material-table input.foc-input:disabled,
+.material-table input.foc-input[readonly] {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    font-weight: normal;
+}
+
 .material-table input.price-input {
     text-align: center;
     padding: 6px;
