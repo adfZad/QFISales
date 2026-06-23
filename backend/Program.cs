@@ -427,22 +427,29 @@ app.MapGet("/api/materials", async () =>
             {
                 await conn.OpenAsync();
                 var pricesDict = new Dictionary<string, Dictionary<string, MaterialPriceDto>>();
-                string priceSql = "SELECT ERP_CODE, PriceType, Price, UOM FROM PriceMaster";
-                using (var cmdPrices = new SqlCommand(priceSql, conn))
-                using (var readerPrices = await cmdPrices.ExecuteReaderAsync())
+                try
                 {
-                    while (await readerPrices.ReadAsync())
+                    string priceSql = "SELECT ERP_CODE, PriceType, Price, UOM FROM PriceMaster";
+                    using (var cmdPrices = new SqlCommand(priceSql, conn))
+                    using (var readerPrices = await cmdPrices.ExecuteReaderAsync())
                     {
-                        string code = readerPrices["ERP_CODE"]?.ToString() ?? "";
-                        string pType = readerPrices["PriceType"]?.ToString() ?? "REGULAR";
-                        decimal pPrice = readerPrices["Price"] != DBNull.Value ? Convert.ToDecimal(readerPrices["Price"]) : 0m;
-                        string pUom = readerPrices["UOM"]?.ToString() ?? "";
-
-                        if (!pricesDict.ContainsKey(code))
-                            pricesDict[code] = new Dictionary<string, MaterialPriceDto>();
-                        
-                        pricesDict[code][pType] = new MaterialPriceDto { Price = pPrice, UOM = pUom };
+                        while (await readerPrices.ReadAsync())
+                        {
+                            string code = readerPrices["ERP_CODE"]?.ToString() ?? "";
+                            string pType = readerPrices["PriceType"]?.ToString() ?? "REGULAR";
+                            decimal pPrice = readerPrices["Price"] != DBNull.Value ? Convert.ToDecimal(readerPrices["Price"]) : 0m;
+                            string uom = readerPrices["UOM"]?.ToString() ?? "EA";
+                            if (!pricesDict.ContainsKey(code))
+                            {
+                                pricesDict[code] = new Dictionary<string, MaterialPriceDto>();
+                            }
+                            pricesDict[code][pType] = new MaterialPriceDto { PriceType = pType, Price = pPrice, UOM = uom };
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not fetch PriceMaster: {ex.Message}");
                 }
 
                 // Querying your Material table
