@@ -1195,7 +1195,7 @@ async function handleFormSubmit(e) {
             <tr>
                 <td style="padding: 10px 16px;"><strong>${item.description}</strong><br><small style="color:var(--text-muted);">${item.code}</small></td>
                 <td style="padding: 10px 16px; text-align:center;">${item.qty > 0 ? item.qty : '-'}</td>
-                <td style="padding: 10px 16px; text-align:center;">${item.foc > 0 ? item.foc : '-'}</td>
+                <td style="padding: 10px 16px; text-align:center; ${item.foc > 0 ? 'color: #e67e22; font-weight: 600;' : ''}">${item.foc > 0 ? item.foc : '-'}</td>
                 <td style="padding: 10px 16px; text-align:right;">${item.unitPrice.toFixed(2)}</td>
                 <td style="padding: 10px 16px; text-align:right;"><strong>${item.totalPrice.toFixed(2)}</strong></td>
             </tr>
@@ -1409,7 +1409,7 @@ async function viewOrderDetails(orderId) {
             <td class="text-center">${orderedItem.code}</td>
             <td class="text-center">${orderedItem.packing}</td>
             <td class="text-center">${orderedItem.qty > 0 ? orderedItem.qty : '-'}</td>
-            <td class="text-center">${orderedItem.foc > 0 ? orderedItem.foc : '-'}</td>
+            <td class="text-center" style="${orderedItem.foc > 0 ? 'color: #e67e22; font-weight: 600;' : ''}">${orderedItem.foc > 0 ? orderedItem.foc : '-'}</td>
             <td class="text-right">${orderedItem.unitPrice > 0 ? orderedItem.unitPrice.toFixed(2) : '-'}</td>
             <td class="text-right">${orderedItem.totalPrice > 0 ? orderedItem.totalPrice.toFixed(2) : '0.00'}</td>
             <td style="font-size: 12px; font-style: italic;">${orderedItem.remarks || '-'}</td>
