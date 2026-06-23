@@ -50,6 +50,9 @@ const FALLBACK_CUSTOMERS = [
 ];
 
 // 2. APPLICATION STATE
+let currentSalesperson = "";
+let currentSalespersonCode = "";
+let currentPriceType = "REGULAR";
 let orders = [];
 let currentEditingId = null;
 let deleteTargetId = null;
@@ -69,7 +72,11 @@ const loginSalespersonSelect = document.getElementById("loginSalespersonSelect")
 const btnLogin = document.getElementById("btnLogin");
 const userProfile = document.getElementById("userProfile");
 const lblLoggedUser = document.getElementById("lblLoggedUser");
+const lblLoggedRoute = document.getElementById("lblLoggedRoute");
 const btnLogout = document.getElementById("btnLogout");
+const btnChangePassword = document.getElementById("btnChangePassword");
+const changePasswordModal = document.getElementById("changePasswordModal");
+const btnSubmitChangePassword = document.getElementById("btnSubmitChangePassword");
 
 // Mappings Elements
 const btnManageMappings = document.getElementById("btnManageMappings");
@@ -100,7 +107,6 @@ const orderEntryForm = document.getElementById("orderEntryForm");
 const orderDateInput = document.getElementById("orderDate");
 const customerNameInput = document.getElementById("customerName");
 const customerCodeInput = document.getElementById("customerCode");
-const customerSuggestions = document.getElementById("customerSuggestions");
 const salesPersonInput = document.getElementById("salesPerson");
 const salesPNCodeInput = document.getElementById("salesPNCode");
 const salespersonSuggestions = document.getElementById("salespersonSuggestions");
@@ -148,6 +154,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Live clock: updates every second showing date + time
 function startLiveClock() {
     const clockEl = document.getElementById("liveClock");
+    if (!clockEl) return;
     function tick() {
         const now = new Date();
         const dd   = String(now.getDate()).padStart(2, '0');
@@ -210,8 +217,10 @@ async function initLoginFlow() {
     const loggedCode = localStorage.getItem("loggedSalespersonCode");
     const loggedName = localStorage.getItem("loggedSalespersonName");
 
+    const loggedRoute = localStorage.getItem("loggedSalespersonRoute") || "";
+
     if (loggedCode && loggedName) {
-        completeLogin(loggedCode, loggedName);
+        completeLogin(loggedCode, loggedName, loggedRoute);
     } else {
         // Show login modal
         loginModal.classList.add("active");
@@ -244,7 +253,8 @@ async function initLoginFlow() {
                 localStorage.setItem("loggedSalespersonName", profile.name);
                 localStorage.setItem("loggedUserType", profile.userType);
                 localStorage.setItem("loggedSupervisorCode", profile.supervisorCode || "");
-                completeLogin(profile.code, profile.name);
+                localStorage.setItem("loggedSalespersonRoute", profile.route || "");
+                completeLogin(profile.code, profile.name, profile.route || "");
             } else {
                 alert("Invalid ERP EMP CODE or Password!");
             }
@@ -262,18 +272,120 @@ async function initLoginFlow() {
         localStorage.removeItem("loggedSalespersonName");
         localStorage.removeItem("loggedUserType");
         localStorage.removeItem("loggedSupervisorCode");
+        localStorage.removeItem("loggedSalespersonRoute");
         location.reload();
     });
+
+    if (btnChangePassword) {
+        btnChangePassword.addEventListener("click", () => {
+            changePasswordModal.classList.add("active");
+            document.getElementById("changePasswordForm").reset();
+            document.getElementById("changePasswordError").style.display = "none";
+            document.getElementById("changePasswordSuccess").style.display = "none";
+        });
+    }
+
+    if (btnSubmitChangePassword) {
+        btnSubmitChangePassword.addEventListener("click", async () => {
+            const currentPassword = document.getElementById("currentPassword").value;
+            const newPassword = document.getElementById("newPassword").value;
+            const confirmNewPassword = document.getElementById("confirmNewPassword").value;
+            const errorDiv = document.getElementById("changePasswordError");
+            const successDiv = document.getElementById("changePasswordSuccess");
+            
+            errorDiv.style.display = "none";
+            successDiv.style.display = "none";
+            
+            if (!currentPassword || !newPassword || !confirmNewPassword) {
+                errorDiv.textContent = "All fields are required.";
+                errorDiv.style.display = "block";
+                return;
+            }
+            
+            if (newPassword !== confirmNewPassword) {
+                errorDiv.textContent = "New passwords do not match.";
+                errorDiv.style.display = "block";
+                return;
+            }
+            
+            const empCode = localStorage.getItem("loggedSalespersonCode");
+            if (!empCode) {
+                errorDiv.textContent = "You must be logged in.";
+                errorDiv.style.display = "block";
+                return;
+            }
+            
+            btnSubmitChangePassword.disabled = true;
+            btnSubmitChangePassword.textContent = "Updating...";
+            
+            try {
+                const res = await fetch(`${API_BASE_URL}/change-password`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        empCode: empCode,
+                        currentPassword: currentPassword,
+                        newPassword: newPassword
+                    })
+                });
+                
+                if (res.ok) {
+                    successDiv.style.display = "block";
+                    setTimeout(() => {
+                        changePasswordModal.classList.remove("active");
+                        document.getElementById("changePasswordForm").reset();
+                        successDiv.style.display = "none";
+                    }, 1500);
+                } else if (res.status === 401) {
+                    errorDiv.textContent = "Incorrect current password.";
+                    errorDiv.style.display = "block";
+                } else {
+                    errorDiv.textContent = "An error occurred while updating the password.";
+                    errorDiv.style.display = "block";
+                }
+            } catch (ex) {
+                errorDiv.textContent = "Connection error. Please try again later.";
+                errorDiv.style.display = "block";
+            } finally {
+                btnSubmitChangePassword.disabled = false;
+                btnSubmitChangePassword.textContent = "Update Password";
+            }
+        });
+    }
 }
 
-function completeLogin(code, name) {
+function completeLogin(code, name, route) {
     loginModal.classList.remove("active");
     document.getElementById("appContainer").style.display = "block";
     userProfile.style.display = "flex";
     lblLoggedUser.textContent = `${name} (${code})`;
+    if (lblLoggedRoute) {
+        lblLoggedRoute.textContent = route ? route : "No Route Assigned";
+    }
     
-    // Reload orders now that the user context is established
+    // Reload orders and customer dropdown now that the user context is established
     loadOrdersFromSource();
+    populateCustomerDropdown(code);
+}
+
+async function populateCustomerDropdown(spCode) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/customers?salesPersonCode=${encodeURIComponent(spCode)}`);
+        if (response.ok) {
+            const customers = await response.json();
+            customerNameInput.innerHTML = '<option value="">-- Select Customer --</option>';
+            customers.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.name;
+                opt.textContent = `${c.name} (${c.code})`;
+                opt.dataset.code = c.code;
+                opt.dataset.priceType = c.priceType || "REGULAR";
+                customerNameInput.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error("Error loading customers for dropdown", e);
+    }
 }
 
 // Load orders from API or LocalStorage
@@ -355,12 +467,17 @@ function setupEventListeners() {
         btn.addEventListener("click", () => showView("dashboard"));
     });
 
-    // Autocomplete input with dynamic debounce
-    customerNameInput.addEventListener("input", debounce(handleCustomerNameInput, 150));
-    document.addEventListener("click", (e) => {
-        if (e.target !== customerNameInput && e.target !== customerSuggestions) {
-            customerSuggestions.style.display = "none";
+    // Customer dropdown change listener
+    customerNameInput.addEventListener("change", (e) => {
+        const selectedOption = customerNameInput.options[customerNameInput.selectedIndex];
+        if (selectedOption && selectedOption.dataset.code) {
+            customerCodeInput.value = selectedOption.dataset.code;
+            currentPriceType = selectedOption.dataset.priceType || "REGULAR";
+        } else {
+            customerCodeInput.value = "";
+            currentPriceType = "REGULAR";
         }
+        updateCatalogPricing(currentPriceType);
     });
 
     salesPersonInput.addEventListener("input", debounce(handleSalespersonNameInput, 150));
@@ -458,6 +575,34 @@ function debounce(fn, delay) {
 // ==========================================
 // RENDER DATA FUNCTIONS
 // ==========================================
+function updateCatalogPricing(priceType) {
+    MATERIAL_MASTER.forEach(material => {
+        // Find correct pricing
+        let activePrice = material.defaultPrice;
+        let activeUOM = material.packing;
+        
+        if (material.prices && material.prices[priceType]) {
+            activePrice = material.prices[priceType].price;
+            activeUOM = material.prices[priceType].uom || material.packing;
+        } else if (material.prices && material.prices["REGULAR"]) {
+            activePrice = material.prices["REGULAR"].price;
+            activeUOM = material.prices["REGULAR"].uom || material.packing;
+        }
+        
+        // Update DOM elements if they exist
+        const row = document.getElementById(`row-${material.no}`);
+        if (row) {
+            row.dataset.packing = activeUOM;
+            const uomCell = row.querySelector('.col-pack');
+            if (uomCell) uomCell.textContent = activeUOM;
+            
+            const priceCell = row.querySelector('.col-price');
+            if (priceCell) priceCell.textContent = activePrice.toFixed(2);
+        }
+    });
+    // Recalculate totals for items already in cart
+    calculateTotals();
+}
 function renderMaterialFormRows() {
     materialsFormBody.innerHTML = "";
     
@@ -475,19 +620,30 @@ function renderMaterialFormRows() {
     }
 
     MATERIAL_MASTER.forEach(material => {
+        let activePrice = material.defaultPrice;
+        let activeUOM = material.packing;
+        if (material.prices && material.prices[currentPriceType]) {
+            activePrice = material.prices[currentPriceType].price;
+            activeUOM = material.prices[currentPriceType].uom || material.packing;
+        } else if (material.prices && material.prices["REGULAR"]) {
+            activePrice = material.prices["REGULAR"].price;
+            activeUOM = material.prices["REGULAR"].uom || material.packing;
+        }
+
         const row = document.createElement("tr");
         row.id = `row-${material.no}`;
         row.dataset.no = material.no;
         row.dataset.code = material.code;
-        row.dataset.packing = material.packing;
+        row.dataset.packing = activeUOM;
         row.dataset.desc = material.description;
         row.dataset.group = material.group || "";
+        row.dataset.salesGroup = material.salesGroup || "";
         
         row.innerHTML = `
             <td class="col-no text-center">${material.no}</td>
-            <td class="col-desc"><strong>${material.description}</strong></td>
+            <td class="col-desc" title="${material.description}"><strong>${material.description}</strong></td>
             <td class="col-code text-center">${material.code}</td>
-            <td class="col-pack text-center">${material.packing}</td>
+            <td class="col-pack text-center">${activeUOM}</td>
             <td class="col-qty">
                 <input type="number" min="0" class="form-control qty-input" style="text-align: center;" placeholder="0" data-no="${material.no}">
             </td>
@@ -497,11 +653,7 @@ function renderMaterialFormRows() {
                     <input type="number" min="0" class="form-control foc-input" style="text-align: center;" placeholder="0" data-no="${material.no}" readonly>
                 </div>
             </td>
-            <td class="col-price">
-                <input type="number" min="0" step="0.01" class="form-control price-input" style="text-align: center;"
-                       value="${material.defaultPrice > 0 ? material.defaultPrice : ''}" 
-                       placeholder="0.00" data-no="${material.no}">
-            </td>
+            <td class="col-price text-center">${activePrice.toFixed(2)}</td>
             <td class="col-total" id="total-${material.no}">QAR 0.00</td>
             <td class="col-remarks">
                 <input type="text" class="form-control remarks-input" placeholder="Line remarks..." data-no="${material.no}">
@@ -510,7 +662,6 @@ function renderMaterialFormRows() {
         
         const qtyIn = row.querySelector(".qty-input");
         const focIn = row.querySelector(".foc-input");
-        const priceIn = row.querySelector(".price-input");
         const focChk = row.querySelector(".foc-enable-chk");
         
         focChk.addEventListener("change", (e) => {
@@ -524,7 +675,7 @@ function renderMaterialFormRows() {
             }
         });
         
-        [qtyIn, focIn, priceIn].forEach(input => {
+        [qtyIn, focIn].forEach(input => {
             input.addEventListener("input", () => calculateRowAndFormTotals(material.no));
         });
         
@@ -535,10 +686,14 @@ function renderMaterialFormRows() {
 // ==========================================
 // DYNAMIC CALCULATIONS & FORM LOGIC
 // ==========================================
+function calculateTotals() {
+    MATERIAL_MASTER.forEach(m => calculateRowAndFormTotals(m.no));
+}
+
 function calculateRowAndFormTotals(itemNo) {
     const row = document.getElementById(`row-${itemNo}`);
     const qty = parseInt(row.querySelector(".qty-input").value) || 0;
-    const price = parseFloat(row.querySelector(".price-input").value) || 0;
+    const price = parseFloat(row.querySelector(".col-price").textContent) || 0;
     
     const rowTotal = qty * price;
     document.getElementById(`total-${itemNo}`).textContent = rowTotal > 0 ? `QAR ${rowTotal.toFixed(2)}` : "QAR 0.00";
@@ -558,7 +713,7 @@ function calculateRowAndFormTotals(itemNo) {
         const r = document.getElementById(`row-${m.no}`);
         const q = parseInt(r.querySelector(".qty-input").value) || 0;
         const f = parseInt(r.querySelector(".foc-input").value) || 0;
-        const p = parseFloat(r.querySelector(".price-input").value) || 0;
+        const p = parseFloat(r.querySelector(".col-price").textContent) || 0;
         
         if (q > 0 || f > 0) {
             itemsCount++;
@@ -574,57 +729,7 @@ function calculateRowAndFormTotals(itemNo) {
     netAmountSum.textContent = grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// Handles Customer Autocomplete via dynamic API search
-async function handleCustomerNameInput(e) {
-    const val = e.target.value.trim().toLowerCase();
-    customerSuggestions.innerHTML = "";
-    customerSuggestions.style.display = "none";
-    customerCodeInput.value = ""; 
-
-    if (val.length < 1) return;
-
-    let matches = [];
-    const loggedSalespersonCode = localStorage.getItem("loggedSalespersonCode") || "";
-    const spParam = loggedSalespersonCode ? `&salesPersonCode=${encodeURIComponent(loggedSalespersonCode)}` : "";
-
-    if (isBackendConnected) {
-        try {
-            const res = await fetch(`${API_BASE_URL}/customers?query=${encodeURIComponent(val)}${spParam}`);
-            matches = await res.json();
-        } catch {
-            matches = FALLBACK_CUSTOMERS.filter(c => c.name.toLowerCase().includes(val));
-        }
-    } else {
-        matches = FALLBACK_CUSTOMERS.filter(c => c.name.toLowerCase().includes(val));
-    }
-
-    if (matches.length === 0) {
-        const suggestion = document.createElement("div");
-        suggestion.className = "autocomplete-suggestion";
-        suggestion.innerHTML = `<i class="fa-solid fa-plus-circle"></i> Create new: "<strong>${e.target.value}</strong>"`;
-        suggestion.addEventListener("click", () => {
-            customerNameInput.value = e.target.value;
-            customerCodeInput.value = "C" + Math.floor(10000 + Math.random() * 90000);
-            customerSuggestions.style.display = "none";
-        });
-        customerSuggestions.appendChild(suggestion);
-        customerSuggestions.style.display = "block";
-        return;
-    }
-
-    matches.forEach(match => {
-        const suggestion = document.createElement("div");
-        suggestion.className = "autocomplete-suggestion";
-        suggestion.innerHTML = `<strong>${match.name}</strong> <span style="float:right; font-size:11px; color:var(--text-muted);">${match.code}</span>`;
-        suggestion.addEventListener("click", () => {
-            customerNameInput.value = match.name;
-            customerCodeInput.value = match.code;
-            customerSuggestions.style.display = "none";
-        });
-        customerSuggestions.appendChild(suggestion);
-    });
-    customerSuggestions.style.display = "block";
-}
+/// Customer Autocomplete removed in favor of Dropdown.
 
 // Handles Salesperson Autocomplete via dynamic API search
 async function handleSalespersonNameInput(e, inputElem, codeElem, suggestionsElem) {
@@ -804,6 +909,10 @@ function resetForm() {
     customerCodeInput.value = "";
     salesPersonInput.value = localStorage.getItem("loggedSalespersonName") || "";
     salesPNCodeInput.value = localStorage.getItem("loggedSalespersonCode") || "";
+    currentPriceType = "REGULAR";
+    
+    // Reset pricing/uom to default
+    updateCatalogPricing("REGULAR");
     
     MATERIAL_MASTER.forEach(m => {
         const r = document.getElementById(`row-${m.no}`);
@@ -813,7 +922,6 @@ function resetForm() {
         focIn.setAttribute("readonly", "readonly");
         r.querySelector(".foc-enable-chk").checked = false;
         r.querySelector(".remarks-input").value = "";
-        r.querySelector(".price-input").value = m.defaultPrice > 0 ? m.defaultPrice : "";
         r.classList.remove("active-row");
         document.getElementById(`total-${m.no}`).textContent = "QAR 0.00";
     });
@@ -974,11 +1082,6 @@ function renderOrderRow(order, tbody, isReturnedTable) {
                 </span>
             </td>
             <td style="text-align: center;">
-                ${order.isCreditVerified 
-                    ? '<span style="color: var(--color-success); font-size:16px;"><i class="fa-solid fa-circle-check"></i> Verified</span>' 
-                    : '<span style="color: var(--text-muted); font-size:14px;"><i class="fa-solid fa-circle-minus"></i> N/A</span>'}
-            </td>
-            <td style="text-align: center;">
                 <div class="actions-cell" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
                     <button class="btn btn-secondary btn-sm" onclick="viewOrderDetails('${order.id}')" title="View Printable Order">
                         <i class="fa-solid fa-eye"></i> View
@@ -1022,7 +1125,7 @@ async function handleFormSubmit(e) {
         const r = document.getElementById(`row-${m.no}`);
         const qty = parseInt(r.querySelector(".qty-input").value) || 0;
         const foc = parseInt(r.querySelector(".foc-input").value) || 0;
-        const price = parseFloat(r.querySelector(".price-input").value) || 0;
+        const price = parseFloat(r.querySelector(".col-price").textContent) || 0;
         const remarks = r.querySelector(".remarks-input").value.trim();
         
         if (qty > 0 || foc > 0) {
@@ -1031,7 +1134,7 @@ async function handleFormSubmit(e) {
                 no: m.no,
                 description: m.description,
                 code: m.code,
-                packing: m.packing,
+                packing: r.dataset.packing,
                 qty: qty,
                 foc: foc,
                 unitPrice: price,
@@ -1083,14 +1186,18 @@ async function handleFormSubmit(e) {
     
     const reviewItemsBody = document.getElementById("reviewItemsBody");
     reviewItemsBody.innerHTML = "";
+    
+    // Sort items: Bulk first, then Retail
+    orderPayload.items = sortItemsByBulk(orderPayload.items);
+
     orderPayload.items.forEach(item => {
         reviewItemsBody.innerHTML += `
             <tr>
-                <td style="border: 1px solid var(--border-color); padding: 8px;"><strong>${item.description}</strong><br><small style="color:var(--text-muted);">${item.code}</small></td>
-                <td style="border: 1px solid var(--border-color); padding: 8px; text-align:center;">${item.qty > 0 ? item.qty : '-'}</td>
-                <td style="border: 1px solid var(--border-color); padding: 8px; text-align:center;">${item.foc > 0 ? item.foc : '-'}</td>
-                <td style="border: 1px solid var(--border-color); padding: 8px; text-align:right;">${item.unitPrice.toFixed(2)}</td>
-                <td style="border: 1px solid var(--border-color); padding: 8px; text-align:right;"><strong>${item.totalPrice.toFixed(2)}</strong></td>
+                <td style="padding: 10px 16px;"><strong>${item.description}</strong><br><small style="color:var(--text-muted);">${item.code}</small></td>
+                <td style="padding: 10px 16px; text-align:center;">${item.qty > 0 ? item.qty : '-'}</td>
+                <td style="padding: 10px 16px; text-align:center;">${item.foc > 0 ? item.foc : '-'}</td>
+                <td style="padding: 10px 16px; text-align:right;">${item.unitPrice.toFixed(2)}</td>
+                <td style="padding: 10px 16px; text-align:right;"><strong>${item.totalPrice.toFixed(2)}</strong></td>
             </tr>
         `;
     });
@@ -1200,6 +1307,11 @@ async function editOrder(orderId) {
     salesPersonInput.value = order.salesPerson || "Jawed Akthar";
     salesPNCodeInput.value = order.salesPNCode || "100302";
     
+    // Update price type and refresh catalog
+    const option = Array.from(customerNameInput.options).find(opt => opt.dataset.code === order.customerCode);
+    currentPriceType = option ? (option.dataset.priceType || "REGULAR") : "REGULAR";
+    updateCatalogPricing(currentPriceType);
+    
     if (order.paymentMode === "CREDIT") {
         document.getElementById("payCredit").checked = true;
     } else {
@@ -1214,7 +1326,6 @@ async function editOrder(orderId) {
         focIn.setAttribute("readonly", "readonly");
         r.querySelector(".foc-enable-chk").checked = false;
         r.querySelector(".remarks-input").value = "";
-        r.querySelector(".price-input").value = m.defaultPrice > 0 ? m.defaultPrice : "";
         r.classList.remove("active-row");
         document.getElementById(`total-${m.no}`).textContent = "QAR 0.00";
     });
@@ -1234,7 +1345,6 @@ async function editOrder(orderId) {
                 focIn.setAttribute("readonly", "readonly");
                 focIn.value = "";
             }
-            r.querySelector(".price-input").value = item.unitPrice;
             r.querySelector(".remarks-input").value = item.remarks || "";
             r.classList.add("active-row");
             
@@ -1287,6 +1397,10 @@ async function viewOrderDetails(orderId) {
     viewSalesPNCode.textContent = order.salesPNCode || "100302";
     
     viewInvoiceItemsBody.innerHTML = "";
+    
+    // Sort items: Bulk first, then Retail
+    order.items = sortItemsByBulk(order.items);
+
     order.items.forEach(orderedItem => {
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -1520,6 +1634,35 @@ async function rejectOrder(orderId, providedReason = null) {
 }
 
 // 6. DASHBOARD SEARCH FILTERING
+function generateUniqueRef() {
+    return 'REQ-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Sorting helper: Bulk items first, then Retail
+function sortItemsByBulk(items) {
+    return items.sort((a, b) => {
+        // Find salesGroup from MATERIAL_MASTER if not on the item directly
+        let groupA = a.salesGroup;
+        if (!groupA) {
+            const matA = MATERIAL_MASTER.find(m => m.code === a.code);
+            groupA = matA ? matA.salesGroup : "";
+        }
+        let groupB = b.salesGroup;
+        if (!groupB) {
+            const matB = MATERIAL_MASTER.find(m => m.code === b.code);
+            groupB = matB ? matB.salesGroup : "";
+        }
+
+        const aIsBulk = groupA && groupA.toLowerCase().includes('bulk') ? 1 : 0;
+        const bIsBulk = groupB && groupB.toLowerCase().includes('bulk') ? 1 : 0;
+        
+        if (aIsBulk !== bIsBulk) {
+            return bIsBulk - aIsBulk; // 1 (Bulk) comes before 0
+        }
+        return a.no - b.no; // Fallback to item No
+    });
+}
+
 function handleDashboardSearch() {
     const query = searchOrdersInput.value.trim().toLowerCase();
     const fromDateStr = dateFilterFrom.value;

@@ -26,10 +26,15 @@
         </div>
         <div style="display: flex; align-items: center; gap: 15px;">
             <div id="userProfile" style="display: none; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--color-primary);">
-                <i class="fa-solid fa-user-circle" style="font-size: 16px;"></i> <span id="lblLoggedUser"></span>
-                <button type="button" id="btnLogout" class="btn btn-secondary btn-sm" style="padding: 4px 10px !important; margin-left: 12px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-power-off"></i> Logout</button>
+                <i class="fa-solid fa-user-circle" style="font-size: 16px;"></i>
+                <div style="display: flex; flex-direction: column; line-height: 1.2;">
+                    <span id="lblLoggedUser"></span>
+                    <span id="lblLoggedRoute" style="font-size: 11px; color: var(--text-muted); font-weight: 500;"></span>
+                </div>
+                <button type="button" id="btnChangePassword" class="btn btn-secondary btn-sm" style="padding: 4px 10px !important; margin-left: 12px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-key"></i> Change Password</button>
+                <button type="button" id="btnLogout" class="btn btn-secondary btn-sm" style="padding: 4px 10px !important; margin-left: 6px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-power-off"></i> Logout</button>
             </div>
-            <span class="badge badge-neutral"><i class="fa-solid fa-clock"></i> <span id="liveClock">--</span></span>
+            <!-- <span class="badge badge-neutral"><i class="fa-solid fa-clock"></i> <span id="liveClock">--</span></span> -->
         </div>
     </header>
 
@@ -111,7 +116,7 @@
                             <th style="width: 120px;">Payment</th>
                             <th style="text-align: right; width: 140px;">Total Amount</th>
                             <th style="text-align: center; width: 110px;">Status</th>
-                            <th style="text-align: center; width: 130px;">Credit Verified</th>
+                            <!-- <th style="text-align: center; width: 130px;">Credit Verified</th> -->
                             <th style="text-align: center; width: 200px;">Actions</th>
                         </tr>
                     </thead>
@@ -138,7 +143,7 @@
                             <th style="width: 120px;">Payment</th>
                             <th style="text-align: right; width: 140px;">Total Amount</th>
                             <th style="text-align: center; width: 140px;">Status</th>
-                            <th style="text-align: center; width: 130px;">Credit Verified</th>
+                            <!-- <th style="text-align: center; width: 130px;">Credit Verified</th> -->
                             <th style="text-align: center; width: 200px;">Actions</th>
                         </tr>
                     </thead>
@@ -165,7 +170,7 @@
                             <th style="width: 120px;">Payment</th>
                             <th style="text-align: right; width: 140px;">Total Amount</th>
                             <th style="text-align: center; width: 140px;">Status</th>
-                            <th style="text-align: center; width: 130px;">Credit Verified</th>
+                            <!-- <th style="text-align: center; width: 130px;">Credit Verified</th> -->
                             <th style="text-align: center; width: 200px;">Actions</th>
                         </tr>
                     </thead>
@@ -212,10 +217,11 @@
                         <label for="referenceNumber">Reference Number *</label>
                         <input type="text" id="referenceNumber" class="form-control" placeholder="Enter reference..." required>
                     </div>
-                    <div class="form-group autocomplete-container">
+                    <div class="form-group">
                         <label for="customerName">Customer Name *</label>
-                        <input type="text" id="customerName" class="form-control" placeholder="Type customer name..." autocomplete="off" required>
-                        <div id="customerSuggestions" class="autocomplete-suggestions"></div>
+                        <select id="customerName" class="form-control" required>
+                            <option value="">-- Select Customer --</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="customerCode">Customer Code *</label>
@@ -270,7 +276,7 @@
                                 <th class="col-no">No</th>
                                 <th class="col-desc">Material Description</th>
                                 <th class="col-code">I/M Code</th>
-                                <th class="col-pack">Packing</th>
+                                <th class="col-pack">UOM</th>
                                 <th class="col-qty">O/R QTY</th>
                                 <th class="col-foc">FOC QTY</th>
                                 <th class="col-price">Unit Price</th>
@@ -395,7 +401,7 @@
                         <th style="width: 40px;">NO</th>
                         <th>MATERIAL DESCRIPTION</th>
                         <th style="width: 80px;">I/M Code</th>
-                        <th style="width: 90px;">PACKING</th>
+                        <th style="width: 90px;">UOM</th>
                         <th style="width: 90px;">O/R QTY</th>
                         <th style="width: 80px;">FOC</th>
                         <th style="width: 100px;">UNIT PRICE</th>
@@ -490,9 +496,9 @@
             <h3 class="modal-title"><i class="fa-solid fa-list-check" style="color: var(--color-primary);"></i> Review Order Details</h3>
             <button class="modal-close-btn btnCloseReviewModal">&times;</button>
         </div>
-        <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
-            <div id="reviewCustomerInfo" style="margin-bottom: 16px; font-size: 14px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);"></div>
-            <table class="invoice-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <div class="modal-body" style="max-height: 65vh; overflow-y: auto; padding: 20px;">
+            <div id="reviewCustomerInfo" class="review-customer-card"></div>
+            <table class="review-table">
                 <thead>
                     <tr>
                         <th style="text-align: left;">Material Description</th>
@@ -504,7 +510,7 @@
                 </thead>
                 <tbody id="reviewItemsBody"></tbody>
             </table>
-            <div style="text-align: right; margin-top: 16px; font-weight: 800; font-size: 18px; color: var(--color-primary);" id="reviewGrandTotal"></div>
+            <div id="reviewGrandTotal" class="review-grand-total"></div>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary btnCloseReviewModal">Go Back</button>
@@ -597,6 +603,40 @@
         </div>
     </div>
 </section>
+
+<!-- ==========================================
+     CHANGE PASSWORD MODAL
+     ========================================== -->
+<div id="changePasswordModal" class="modal-overlay">
+    <div class="modal" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>Change Password</h3>
+            <button type="button" class="btn-close" onclick="document.getElementById('changePasswordModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="changePasswordForm">
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" id="currentPassword" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="newPassword" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="confirmNewPassword" class="form-control" required>
+                </div>
+                <div id="changePasswordError" style="color: var(--danger-color); font-size: 12px; margin-bottom: 10px; display: none;"></div>
+                <div id="changePasswordSuccess" style="color: var(--success-color); font-size: 12px; margin-bottom: 10px; display: none;">Password changed successfully!</div>
+            </form>
+        </div>
+        <div class="modal-footer" style="justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('changePasswordModal').classList.remove('active')">Cancel</button>
+            <button type="button" id="btnSubmitChangePassword" class="btn btn-primary">Update Password</button>
+        </div>
+    </div>
+</div>
 
 <!-- ==========================================
      SCRIPTS CORE

@@ -239,13 +239,25 @@ app.MapPost("/api/login", async (LoginRequestDto req) =>
                 using var reader = await cmd.ExecuteReaderAsync();
                 if (await reader.ReadAsync())
                 {
-                    return Results.Ok(new SalespersonDto
+                    var dto = new SalespersonDto
                     {
                         Code = reader["SalesPNCode"]?.ToString() ?? "",
                         Name = reader["SalespersonName"]?.ToString() ?? "",
                         UserType = reader["UserType"]?.ToString() ?? "Salesman",
                         SupervisorCode = reader["SupervisorCode"]?.ToString()
-                    });
+                    };
+                    await reader.CloseAsync();
+                    
+                    string routeSql = "SELECT TOP 1 Route FROM CustomerSalespersonMapping WHERE SalesPNCode = @code AND Route IS NOT NULL AND Route != 'nan'";
+                    using var routeCmd = new SqlCommand(routeSql, conn);
+                    routeCmd.Parameters.AddWithValue("@code", dto.Code);
+                    var routeObj = await routeCmd.ExecuteScalarAsync();
+                    if (routeObj != null && routeObj != DBNull.Value)
+                    {
+                        dto.Route = routeObj.ToString() ?? "";
+                    }
+
+                    return Results.Ok(dto);
                 }
             }
             return Results.Unauthorized();
@@ -260,6 +272,59 @@ app.MapPost("/api/login", async (LoginRequestDto req) =>
     // Mock Fallback
     if (req.EmpCode == "100302" && req.Password == "password") {
         return Results.Ok(new SalespersonDto { Code = "100302", Name = "Jawed Akthar", UserType = "Salesman" });
+    }
+    return Results.Unauthorized();
+});
+
+// 0.2 POST /api/change-password
+// Changes the user's password after verifying the current one
+app.MapPost("/api/change-password", async (ChangePasswordDto req) =>
+{
+    var connStr = GetConnectionString();
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        try
+        {
+            using (var conn = new SqlConnection(connStr))
+            {
+                await conn.OpenAsync();
+                
+                // First verify the current password
+                string verifySql = $"SELECT COUNT(1) FROM {TBL_SALESPERSON} WHERE [ERP EMP CODE] = @code AND Password = @currentPass";
+                using var verifyCmd = new SqlCommand(verifySql, conn);
+                verifyCmd.Parameters.AddWithValue("@code", req.EmpCode);
+                verifyCmd.Parameters.AddWithValue("@currentPass", req.CurrentPassword);
+                
+                int count = Convert.ToInt32(await verifyCmd.ExecuteScalarAsync());
+                if (count == 0)
+                {
+                    return Results.Unauthorized();
+                }
+                
+                // Then update the password
+                string updateSql = $"UPDATE {TBL_SALESPERSON} SET Password = @newPass WHERE [ERP EMP CODE] = @code";
+                using var updateCmd = new SqlCommand(updateSql, conn);
+                updateCmd.Parameters.AddWithValue("@code", req.EmpCode);
+                updateCmd.Parameters.AddWithValue("@newPass", req.NewPassword);
+                
+                int rowsAffected = await updateCmd.ExecuteNonQueryAsync();
+                if (rowsAffected > 0)
+                {
+                    return Results.Ok();
+                }
+                return Results.StatusCode(500);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SQL Change Password query failed: {ex.Message}.");
+            return Results.StatusCode(500);
+        }
+    }
+    
+    // Mock Fallback
+    if (req.EmpCode == "100302" && req.CurrentPassword == "password") {
+        return Results.Ok();
     }
     return Results.Unauthorized();
 });
@@ -285,18 +350,18 @@ app.MapGet("/api/customers", async (HttpContext context) =>
                 string sql = "";
                 if (!string.IsNullOrEmpty(spCode))
                 {
-                    sql = $"SELECT C.CUSTOMER as CustomerCode, C.NAME1 as CustomerName FROM {TBL_CUSTOMER} C INNER JOIN CustomerSalespersonMapping M ON C.CUSTOMER = M.CustomerCode WHERE M.SalesPNCode = @spCode";
+                    sql = $"SELECT C.SAPCode as CustomerCode, C.NAME1 as CustomerName, C.PriceType FROM {TBL_CUSTOMER} C INNER JOIN CustomerSalespersonMapping M ON C.SAPCode = M.CustomerCode WHERE M.SalesPNCode = @spCode";
                     if (!string.IsNullOrEmpty(query))
                     {
-                        sql += " AND (LOWER(C.NAME1) LIKE @query OR LOWER(C.CUSTOMER) LIKE @query)";
+                        sql += " AND (LOWER(C.NAME1) LIKE @query OR LOWER(C.SAPCode) LIKE @query)";
                     }
                 }
                 else 
                 {
-                    sql = $"SELECT CUSTOMER as CustomerCode, NAME1 as CustomerName FROM {TBL_CUSTOMER}";
+                    sql = $"SELECT SAPCode as CustomerCode, NAME1 as CustomerName, PriceType FROM {TBL_CUSTOMER}";
                     if (!string.IsNullOrEmpty(query))
                     {
-                        sql += " WHERE LOWER(NAME1) LIKE @query OR LOWER(CUSTOMER) LIKE @query";
+                        sql += " WHERE LOWER(NAME1) LIKE @query OR LOWER(SAPCode) LIKE @query";
                     }
                 }
                 sql += " ORDER BY NAME1";
@@ -317,7 +382,8 @@ app.MapGet("/api/customers", async (HttpContext context) =>
                     sqlCustomers.Add(new CustomerDto
                     {
                         Code = reader["CustomerCode"]?.ToString() ?? "",
-                        Name = reader["CustomerName"]?.ToString() ?? ""
+                        Name = reader["CustomerName"]?.ToString() ?? "",
+                        PriceType = reader["PriceType"]?.ToString() ?? "REGULAR"
                     });
                 }
             }
@@ -352,6 +418,25 @@ app.MapGet("/api/materials", async () =>
             using (var conn = new SqlConnection(connStr))
             {
                 await conn.OpenAsync();
+                var pricesDict = new Dictionary<string, Dictionary<string, MaterialPriceDto>>();
+                string priceSql = "SELECT ERP_CODE, PriceType, Price, UOM FROM PriceMaster";
+                using (var cmdPrices = new SqlCommand(priceSql, conn))
+                using (var readerPrices = await cmdPrices.ExecuteReaderAsync())
+                {
+                    while (await readerPrices.ReadAsync())
+                    {
+                        string code = readerPrices["ERP_CODE"]?.ToString() ?? "";
+                        string pType = readerPrices["PriceType"]?.ToString() ?? "REGULAR";
+                        decimal pPrice = readerPrices["Price"] != DBNull.Value ? Convert.ToDecimal(readerPrices["Price"]) : 0m;
+                        string pUom = readerPrices["UOM"]?.ToString() ?? "";
+
+                        if (!pricesDict.ContainsKey(code))
+                            pricesDict[code] = new Dictionary<string, MaterialPriceDto>();
+                        
+                        pricesDict[code][pType] = new MaterialPriceDto { Price = pPrice, UOM = pUom };
+                    }
+                }
+
                 // Querying your Material table
                 // Using ROW_NUMBER for ItemNo since it doesn't exist explicitly
                 string sql = $@"SELECT 
@@ -360,22 +445,31 @@ app.MapGet("/api/materials", async () =>
                                     Material as MaterialCode, 
                                     Base_Unit_of_Measure as Packing, 
                                     Price as DefaultPrice,
-                                    [Material Group] as MaterialGroup
+                                    [Material Group] as MaterialGroup,
+                                    [Sales Group] as SalesGroup
                                 FROM {TBL_MATERIAL} 
                                 ORDER BY Material";
                 using var cmd = new SqlCommand(sql, conn);
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    sqlMaterials.Add(new MaterialDto
+                    var matDto = new MaterialDto
                     {
                         No = Convert.ToInt32(reader["ItemNo"]),
                         Description = reader["Description"]?.ToString() ?? "",
                         Code = reader["MaterialCode"]?.ToString() ?? "",
                         Packing = reader["Packing"]?.ToString() ?? "",
                         DefaultPrice = reader["DefaultPrice"] != DBNull.Value ? Convert.ToDecimal(reader["DefaultPrice"]) : 0.00m,
-                        Group = reader["MaterialGroup"]?.ToString() ?? ""
-                    });
+                        Group = reader["MaterialGroup"]?.ToString() ?? "",
+                        SalesGroup = reader["SalesGroup"]?.ToString() ?? ""
+                    };
+                    
+                    if (pricesDict.TryGetValue(matDto.Code, out var pDict))
+                    {
+                        matDto.Prices = pDict;
+                    }
+                    
+                    sqlMaterials.Add(matDto);
                 }
             }
             return Results.Ok(sqlMaterials);
@@ -562,9 +656,9 @@ app.MapPost("/api/orders", async (OrderDto newOrder) =>
                 {
                     // 1. Check and insert Customer Master
                     string sqlCust = @"
-                        IF NOT EXISTS (SELECT 1 FROM [Customer Master] WHERE [CUSTOMER] = @code)
+                        IF NOT EXISTS (SELECT 1 FROM [Customer Master] WHERE [SAPCode] = @code)
                         BEGIN
-                            INSERT INTO [Customer Master] ([CUSTOMER], [NAME1], [SALES_OFFICE]) 
+                            INSERT INTO [Customer Master] ([SAPCode], [NAME1], [SALES_OFFICE]) 
                             VALUES (@code, @name, @office)
                         END";
                     using (var cmdCust = new SqlCommand(sqlCust, conn, trans))
@@ -708,9 +802,9 @@ app.MapPut("/api/orders/{id}", async (string id, OrderDto updatedOrder) =>
 
                     // 1. Check and insert Customer Master
                     string sqlCust = @"
-                        IF NOT EXISTS (SELECT 1 FROM [Customer Master] WHERE [CUSTOMER] = @code)
+                        IF NOT EXISTS (SELECT 1 FROM [Customer Master] WHERE [SAPCode] = @code)
                         BEGIN
-                            INSERT INTO [Customer Master] ([CUSTOMER], [NAME1], [SALES_OFFICE]) 
+                            INSERT INTO [Customer Master] ([SAPCode], [NAME1], [SALES_OFFICE]) 
                             VALUES (@code, @name, @office)
                         END";
                     using (var cmdCust = new SqlCommand(sqlCust, conn, trans))
@@ -949,7 +1043,7 @@ app.MapGet("/api/mappings", async () =>
                 string sql = $@"
                     SELECT M.MappingID, M.CustomerCode, C.NAME1 as CustomerName, M.SalesPNCode, S.SalespersonName 
                     FROM CustomerSalespersonMapping M
-                    INNER JOIN {TBL_CUSTOMER} C ON M.CustomerCode = C.CUSTOMER
+                    INNER JOIN {TBL_CUSTOMER} C ON M.CustomerCode = C.SAPCode
                     LEFT JOIN {TBL_SALESPERSON} S ON M.SalesPNCode = S.[ERP EMP CODE]
                     ORDER BY M.MappingID DESC
                 ";
@@ -1068,6 +1162,7 @@ public class CustomerDto
 {
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
+    public string PriceType { get; set; } = "REGULAR";
 }
 
 public class SalespersonDto
@@ -1076,12 +1171,19 @@ public class SalespersonDto
     public string Name { get; set; } = "";
     public string UserType { get; set; } = "";
     public string? SupervisorCode { get; set; }
+    public string Route { get; set; } = "";
 }
 
 public class LoginRequestDto
 {
     public string EmpCode { get; set; } = "";
     public string Password { get; set; } = "";
+}
+
+public class MaterialPriceDto
+{
+    public decimal Price { get; set; }
+    public string UOM { get; set; } = "";
 }
 
 public class MaterialDto
@@ -1092,6 +1194,8 @@ public class MaterialDto
     public string Packing { get; set; } = "";
     public decimal DefaultPrice { get; set; }
     public string Group { get; set; } = "";
+    public string SalesGroup { get; set; } = "";
+    public Dictionary<string, MaterialPriceDto> Prices { get; set; } = new();
 }
 
 public class OrderDto
@@ -1154,4 +1258,11 @@ public class MappingRequestDto
 {
     public string CustomerCode { get; set; } = "";
     public string SalesPNCode { get; set; } = "";
+}
+
+public class ChangePasswordDto
+{
+    public string EmpCode { get; set; } = "";
+    public string CurrentPassword { get; set; } = "";
+    public string NewPassword { get; set; } = "";
 }
