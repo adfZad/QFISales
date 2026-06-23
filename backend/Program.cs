@@ -443,7 +443,7 @@ app.MapGet("/api/materials", async () =>
                             {
                                 pricesDict[code] = new Dictionary<string, MaterialPriceDto>();
                             }
-                            pricesDict[code][pType] = new MaterialPriceDto { PriceType = pType, Price = pPrice, UOM = uom };
+                            pricesDict[code][pType] = new MaterialPriceDto { Price = pPrice, UOM = uom };
                         }
                     }
                 }
