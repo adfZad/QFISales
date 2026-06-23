@@ -248,13 +248,21 @@ app.MapPost("/api/login", async (LoginRequestDto req) =>
                     };
                     await reader.CloseAsync();
                     
-                    string routeSql = "SELECT TOP 1 Route FROM CustomerSalespersonMapping WHERE SalesPNCode = @code AND Route IS NOT NULL AND Route != 'nan'";
-                    using var routeCmd = new SqlCommand(routeSql, conn);
-                    routeCmd.Parameters.AddWithValue("@code", dto.Code);
-                    var routeObj = await routeCmd.ExecuteScalarAsync();
-                    if (routeObj != null && routeObj != DBNull.Value)
+                    try
                     {
-                        dto.Route = routeObj.ToString() ?? "";
+                        string routeSql = "SELECT TOP 1 Route FROM CustomerSalespersonMapping WHERE SalesPNCode = @code AND Route IS NOT NULL AND Route != 'nan'";
+                        using var routeCmd = new SqlCommand(routeSql, conn);
+                        routeCmd.Parameters.AddWithValue("@code", dto.Code);
+                        using var routeReader = await routeCmd.ExecuteReaderAsync();
+                        if (await routeReader.ReadAsync())
+                        {
+                            dto.Route = routeReader.GetString(0);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Ignore missing Route column on Azure
+                        Console.WriteLine($"Could not fetch Route: {ex.Message}");
                     }
 
                     return Results.Ok(dto);
