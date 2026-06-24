@@ -396,8 +396,13 @@ async function loadOrdersFromSource() {
             const loggedUserType = localStorage.getItem("loggedUserType") || "Salesman";
             const spParam = loggedSalespersonCode ? `?salesPersonCode=${encodeURIComponent(loggedSalespersonCode)}&userType=${encodeURIComponent(loggedUserType)}` : "";
             const res = await fetch(`${API_BASE_URL}/orders${spParam}`);
-            orders = await res.json();
-        } catch {
+            if (res.ok) {
+                orders = await res.json();
+                if (!Array.isArray(orders)) orders = [];
+            } else {
+                loadOrdersFromLocalStorage();
+            }
+        } catch (e) {
             loadOrdersFromLocalStorage();
         }
     } else {
@@ -409,7 +414,12 @@ async function loadOrdersFromSource() {
 function loadOrdersFromLocalStorage() {
     const storedOrders = localStorage.getItem("qfi_sales_orders");
     if (storedOrders) {
-        orders = JSON.parse(storedOrders);
+        try {
+            orders = JSON.parse(storedOrders);
+            if (!Array.isArray(orders)) orders = [];
+        } catch {
+            orders = [];
+        }
     } else {
         // Sample order pre-population
         const sampleOrder = {
@@ -478,6 +488,8 @@ function setupEventListeners() {
             currentPriceType = "REGULAR";
         }
         updateCatalogPricing(currentPriceType);
+        renderMaterialFormRows();
+        calculateTotals();
     });
 
     salesPersonInput.addEventListener("input", debounce(handleSalespersonNameInput, 150));
@@ -606,6 +618,11 @@ function updateCatalogPricing(priceType) {
 function renderMaterialFormRows() {
     materialsFormBody.innerHTML = "";
     
+    if (!customerCodeInput.value) {
+        materialsFormBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 40px; color: #666;">Please select a Customer Name above to load the material list.</td></tr>';
+        return;
+    }
+    
     if (materialGroupFilter && MATERIAL_MASTER.length > 0) {
         const currentSelection = materialGroupFilter.value;
         materialGroupFilter.innerHTML = '<option value="">All Groups</option><option value="_SELECTED_ITEMS_">Selected Items</option>';
@@ -619,7 +636,28 @@ function renderMaterialFormRows() {
         materialGroupFilter.value = currentSelection;
     }
 
+    const currentCustomerCode = customerCodeInput.value.trim();
+
     MATERIAL_MASTER.forEach(material => {
+        // Material Customer Mapping: Only show materials that have a price defined for the customer's Price Type.
+        let isMapped = false;
+        if (material.prices) {
+            // Backend mode: prices object exists.
+            // Only map if this specific customer's price type is present AND price > 0.
+            if (material.prices[currentPriceType] && material.prices[currentPriceType].price > 0) {
+                isMapped = true;
+            } else if (currentPriceType === "REGULAR" && material.prices["REGULAR"] && material.prices["REGULAR"].price > 0) {
+                isMapped = true;
+            }
+        } else {
+            // Fallback mode (no backend): no prices object exists.
+            isMapped = true; 
+        }
+
+        if (!isMapped) {
+            return; // Hide unmapped materials
+        }
+
         let activePrice = material.defaultPrice;
         let activeUOM = material.packing;
         if (material.prices && material.prices[currentPriceType]) {
@@ -692,6 +730,8 @@ function calculateTotals() {
 
 function calculateRowAndFormTotals(itemNo) {
     const row = document.getElementById(`row-${itemNo}`);
+    if (!row) return;
+    
     const qty = parseInt(row.querySelector(".qty-input").value) || 0;
     const price = parseFloat(row.querySelector(".col-price").textContent) || 0;
     
@@ -711,6 +751,7 @@ function calculateRowAndFormTotals(itemNo) {
     
     MATERIAL_MASTER.forEach(m => {
         const r = document.getElementById(`row-${m.no}`);
+        if (!r) return;
         const q = parseInt(r.querySelector(".qty-input").value) || 0;
         const f = parseInt(r.querySelector(".foc-input").value) || 0;
         const p = parseFloat(r.querySelector(".col-price").textContent) || 0;
@@ -913,18 +954,7 @@ function resetForm() {
     
     // Reset pricing/uom to default
     updateCatalogPricing("REGULAR");
-    
-    MATERIAL_MASTER.forEach(m => {
-        const r = document.getElementById(`row-${m.no}`);
-        r.querySelector(".qty-input").value = "";
-        const focIn = r.querySelector(".foc-input");
-        focIn.value = "";
-        focIn.setAttribute("readonly", "readonly");
-        r.querySelector(".foc-enable-chk").checked = false;
-        r.querySelector(".remarks-input").value = "";
-        r.classList.remove("active-row");
-        document.getElementById(`total-${m.no}`).textContent = "QAR 0.00";
-    });
+    renderMaterialFormRows();
     
     totalItemsCount.textContent = "0";
     totalQtySum.textContent = "0";
@@ -984,6 +1014,7 @@ function updateDashboard() {
 }
 
 function renderOrdersList(orderList) {
+    if (!Array.isArray(orderList)) orderList = [];
     ordersTableBody.innerHTML = "";
     document.getElementById("returnedOrdersTableBody").innerHTML = "";
     document.getElementById("pendingOrdersTableBody").innerHTML = "";
@@ -992,16 +1023,18 @@ function renderOrdersList(orderList) {
     const loggedSalespersonCode = (localStorage.getItem("loggedSalespersonCode") || "").trim();
     
     // Only show rejected orders to the salesperson who created them so they can correct it.
-    const returnedOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() === 'rejected' && (o.salesPNCode || "").trim() === loggedSalespersonCode);
+    const returnedOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() === 'rejected' && o.salesPNCode && String(o.salesPNCode).trim() === loggedSalespersonCode);
     
     let pendingOrders = [];
     let mainOrders = [];
     
     if (loggedUserType === 'supervisor') {
-        pendingOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() === 'pending' && o.approver && o.approver.trim() === loggedSalespersonCode);
+        pendingOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() === 'pending' && o.approver && String(o.approver).trim() === loggedSalespersonCode);
+        mainOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() !== 'rejected' && String(o.status).trim().toLowerCase() !== 'pending');
+    } else {
+        pendingOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() === 'pending' && o.salesPNCode && String(o.salesPNCode).trim() === loggedSalespersonCode);
+        mainOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() !== 'rejected' && String(o.status).trim().toLowerCase() !== 'pending');
     }
-    
-    mainOrders = orderList.filter(o => o.status && o.status.trim().toLowerCase() !== 'rejected' && o.status.trim().toLowerCase() !== 'pending');
     
     if (returnedOrders.length > 0) {
         document.getElementById("returnedOrdersCard").style.display = "block";
@@ -1034,8 +1067,9 @@ function renderOrdersList(orderList) {
 function renderOrderRow(order, tbody, isReturnedTable) {
     const row = document.createElement("tr");
         
-        const dateParts = order.date.split("-");
-        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : order.date;
+        const dateStr = String(order.date || '');
+        const dateParts = dateStr.split("-");
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : dateStr;
         
         const loggedUserType = localStorage.getItem("loggedUserType") || "Salesman";
         const loggedSalespersonCode = localStorage.getItem("loggedSalespersonCode") || "";
@@ -1077,7 +1111,7 @@ function renderOrderRow(order, tbody, isReturnedTable) {
             </td>
             <td style="text-align: right; font-weight: 700;">QAR ${order.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             <td style="text-align: center; vertical-align: middle;">
-                <span class="badge" style="background: ${statusBadgeColor}; color: white;">
+                <span style="background: ${statusBadgeColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">
                     ${order.status || 'Pending'}
                 </span>
             </td>
@@ -1089,9 +1123,6 @@ function renderOrderRow(order, tbody, isReturnedTable) {
                     ${editBtn}
                     ${approveBtn}
                     ${rejectBtn}
-                    <button type="button" style="background: transparent; border: none; color: #555; box-shadow: none; cursor: pointer; padding: 4px;" onclick="confirmDeleteOrder('${order.id}')" title="Delete Order">
-                        <i class="fa-solid fa-trash" style="font-size: 13px;"></i>
-                    </button>
                 </div>
             </td>
         `;
@@ -1123,6 +1154,7 @@ async function handleFormSubmit(e) {
     
     MATERIAL_MASTER.forEach(m => {
         const r = document.getElementById(`row-${m.no}`);
+        if (!r) return;
         const qty = parseInt(r.querySelector(".qty-input").value) || 0;
         const foc = parseInt(r.querySelector(".foc-input").value) || 0;
         const price = parseFloat(r.querySelector(".col-price").textContent) || 0;
@@ -1311,6 +1343,7 @@ async function editOrder(orderId) {
     const option = Array.from(customerNameInput.options).find(opt => opt.dataset.code === order.customerCode);
     currentPriceType = option ? (option.dataset.priceType || "REGULAR") : "REGULAR";
     updateCatalogPricing(currentPriceType);
+    renderMaterialFormRows();
     
     if (order.paymentMode === "CREDIT") {
         document.getElementById("payCredit").checked = true;
@@ -1380,8 +1413,9 @@ async function viewOrderDetails(orderId) {
     
     currentEditingId = order.id; 
     
-    const dateParts = order.date.split("-");
-    const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : order.date;
+    const dateStr = String(order.date || '');
+    const dateParts = dateStr.split("-");
+    const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : dateStr;
     
     const reqDateParts = (order.requiredDate || order.date).split("-");
     const formattedReqDate = reqDateParts.length === 3 ? `${reqDateParts[2]}/${reqDateParts[1]}/${reqDateParts[0]}` : (order.requiredDate || order.date);
