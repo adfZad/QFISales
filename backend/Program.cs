@@ -36,7 +36,7 @@ app.UseStaticFiles();
 // ==========================================================================
 // CENTRAL CONFIGURATION & CONSTANTS FOR SQL DATABASE TABLES
 // ==========================================================================
-const string CONN_STRING_NAME = "ZadHoldingDB";
+const string CONN_STRING_NAME = "ZadHoldingDB_Azure";
 const string TBL_CUSTOMER = "[Customer Master]";   // Actual Customer table name
 const string TBL_MATERIAL = "[Material Master]";   // Actual Material table name
 const string TBL_SALESPERSON = "[Salesperson Master]"; // Actual Salesperson table name
@@ -415,6 +415,42 @@ app.MapGet("/api/customers", async (HttpContext context) =>
 
 // 2. GET /api/materials
 // Loads the dynamic material catalog
+
+app.MapGet("/api/foc-eligibility/{customerCode}", async (string customerCode) =>
+{
+    var allowedMaterials = new System.Collections.Generic.List<string>();
+    try
+    {
+        using (var conn = new Microsoft.Data.SqlClient.SqlConnection(GetConnectionString()))
+        {
+            await conn.OpenAsync();
+            string sql = @"
+                SELECT e.ErpCode
+                FROM FocEligibility e
+                INNER JOIN FocCustomerCategory c ON e.FocCategory = c.FocCategory
+                WHERE c.CustomerCode = @code AND e.IsAllowed = 1
+            ";
+            using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@code", customerCode);
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        allowedMaterials.Add(reader.GetString(0));
+                    }
+                }
+            }
+        }
+        return Results.Ok(allowedMaterials);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+
 app.MapGet("/api/materials", async () =>
 {
     var connStr = GetConnectionString();
@@ -429,7 +465,7 @@ app.MapGet("/api/materials", async () =>
                 var pricesDict = new Dictionary<string, Dictionary<string, MaterialPriceDto>>();
                 try
                 {
-                    string priceSql = "SELECT ERP_CODE, PriceType, Price, UOM FROM PriceMaster";
+                    string priceSql = "SELECT ERP_CODE, PriceType, Price, UOM FROM PriceMaster WHERE EffectiveTo IS NULL";
                     using (var cmdPrices = new SqlCommand(priceSql, conn))
                     using (var readerPrices = await cmdPrices.ExecuteReaderAsync())
                     {
@@ -518,8 +554,10 @@ app.MapGet("/api/orders", async (HttpContext context) =>
                 string sql = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason, RequiredDate, ReferenceNumber FROM OrderHeader";
                 if (!string.IsNullOrEmpty(salesPersonCode))
                 {
-                    if (userType == "Supervisor")
-                        sql += " WHERE SalesPNCode = @spCode OR Approver = @spCode";
+                    if (userType.Equals("Supervisor", StringComparison.OrdinalIgnoreCase))
+                        sql += " WHERE SalesPNCode = @spCode OR Approver = @spCode OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Supervisor ERP EMP CODE] = @spCode)";
+                    else if (userType.Equals("Manager", StringComparison.OrdinalIgnoreCase))
+                        sql += " WHERE SalesPNCode = @spCode OR Approver = @spCode OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @spCode)";
                     else
                         sql += " WHERE SalesPNCode = @spCode";
                 }
@@ -948,7 +986,7 @@ app.MapPut("/api/orders/{id}/approve", async (string id, ApproveOrderRequestDto 
             using (var conn = new SqlConnection(connStr))
             {
                 await conn.OpenAsync();
-                string sql = "UPDATE OrderHeader SET Status = 'Approved', RejectReason = @reason WHERE OrderID = @id AND Approver = @approver";
+                string sql = "UPDATE OrderHeader SET Status = 'Approved', RejectReason = @reason WHERE OrderID = @id AND (Approver = @approver OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @approver OR [Supervisor ERP EMP CODE] = @approver))";
                 using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@id", numericId);
                 cmd.Parameters.AddWithValue("@approver", req.ApproverCode);
@@ -981,7 +1019,7 @@ app.MapPut("/api/orders/{id}/reject", async (string id, RejectOrderRequestDto re
             using (var conn = new SqlConnection(connStr))
             {
                 await conn.OpenAsync();
-                string sql = "UPDATE OrderHeader SET Status = 'Rejected', RejectReason = @reason WHERE OrderID = @id AND Approver = @approver";
+                string sql = "UPDATE OrderHeader SET Status = 'Rejected', RejectReason = @reason WHERE OrderID = @id AND (Approver = @approver OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @approver OR [Supervisor ERP EMP CODE] = @approver))";
                 using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@id", numericId);
                 cmd.Parameters.AddWithValue("@approver", req.ApproverCode);
@@ -1113,6 +1151,24 @@ app.MapPost("/api/mappings", async (MappingRequestDto req) =>
                     if (count > 0) return Results.BadRequest("Mapping already exists.");
                 }
 
+                // Check restrict multiple routes
+                string restrictSql = "SELECT SettingValue FROM SystemSettings WHERE SettingKey = 'RestrictMultipleRoutes'";
+                using (var restrictCmd = new SqlCommand(restrictSql, conn))
+                {
+                    var restrictVal = await restrictCmd.ExecuteScalarAsync();
+                    if (restrictVal?.ToString()?.ToLower() == "true")
+                    {
+                        string anyCheckSql = "SELECT COUNT(*) FROM CustomerSalespersonMapping WHERE CustomerCode = @c AND SalesPNCode != @s";
+                        using (var anyCheckCmd = new SqlCommand(anyCheckSql, conn))
+                        {
+                            anyCheckCmd.Parameters.AddWithValue("@c", req.CustomerCode);
+                            anyCheckCmd.Parameters.AddWithValue("@s", req.SalesPNCode);
+                            int anyCount = (int)(await anyCheckCmd.ExecuteScalarAsync() ?? 0);
+                            if (anyCount > 0) return Results.BadRequest("Customer is already assigned to a different route/salesperson. Multiple assignments are restricted.");
+                        }
+                    }
+                }
+
                 string insertSql = "INSERT INTO CustomerSalespersonMapping (CustomerCode, SalesPNCode) OUTPUT INSERTED.MappingID VALUES (@c, @s)";
                 using var cmd = new SqlCommand(insertSql, conn);
                 cmd.Parameters.AddWithValue("@c", req.CustomerCode);
@@ -1168,7 +1224,209 @@ Console.WriteLine($" QFI Sales Customer Order Memo API - Status: {serverStatus}"
 Console.WriteLine(" Listening on: http://localhost:5000");
 Console.WriteLine("==========================================================================");
 
+app.MapGet("/api/settings", async () =>
+{
+    var connStr = GetConnectionString();
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        try
+        {
+            using (var conn = new SqlConnection(connStr))
+            {
+                await conn.OpenAsync();
+                string sql = "SELECT SettingValue FROM SystemSettings WHERE SettingKey = 'RestrictMultipleRoutes'";
+                using var cmd = new SqlCommand(sql, conn);
+                var val = await cmd.ExecuteScalarAsync();
+                bool restrict = (val?.ToString()?.ToLower() == "true");
+                return Results.Ok(new { restrictMultipleRoutes = restrict });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error reading settings: " + ex.Message);
+        }
+    }
+    return Results.Ok(new { restrictMultipleRoutes = false });
+});
+
+app.MapPut("/api/settings", async (UpdateSettingsRequest req) =>
+{
+    var connStr = GetConnectionString();
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        try
+        {
+            using (var conn = new SqlConnection(connStr))
+            {
+                await conn.OpenAsync();
+                string val = req.RestrictMultipleRoutes ? "true" : "false";
+                string sql = @"
+                    IF EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'RestrictMultipleRoutes')
+                        UPDATE SystemSettings SET SettingValue = @val WHERE SettingKey = 'RestrictMultipleRoutes'
+                    ELSE
+                        INSERT INTO SystemSettings (SettingKey, SettingValue) VALUES ('RestrictMultipleRoutes', @val)
+                ";
+                using var cmd = new SqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@val", val);
+                await cmd.ExecuteNonQueryAsync();
+                return Results.Ok(new { Message = "Settings updated successfully" });
+            }
+        }
+        catch (Exception ex)
+        {
+            return Results.StatusCode(500);
+        }
+    }
+    return Results.StatusCode(500);
+});
+
+
+// ==========================================
+// PRICE MAPPING ENDPOINTS
+// ==========================================
+app.MapGet("/api/prices", async () =>
+{
+    var prices = new List<object>();
+    using (var conn = new Microsoft.Data.SqlClient.SqlConnection(GetConnectionString()))
+    {
+        await conn.OpenAsync();
+        string sql = @"
+            SELECT p.PriceID, p.ERP_CODE, m.Material_Description as ItemName, p.PriceType, p.Price, p.UOM, 
+                   CONVERT(varchar, p.EffectiveFrom, 23) as EffectiveFrom, 
+                   CONVERT(varchar, p.EffectiveTo, 23) as EffectiveTo 
+            FROM PriceMaster p 
+            LEFT JOIN [Material Master] m ON CAST(p.ERP_CODE AS VARCHAR(100)) = CAST(m.Material AS VARCHAR(100)) 
+            WHERE p.EffectiveTo IS NULL 
+            ORDER BY p.ERP_CODE";
+        using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                prices.Add(new {
+                    Id = reader.GetInt32(0),
+                    ErpCode = reader.GetString(1),
+                    ItemName = reader.IsDBNull(2) ? "Unknown" : reader.GetString(2),
+                    PriceType = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    Price = reader.GetDecimal(4),
+                    Uom = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                    EffectiveFrom = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    EffectiveTo = reader.IsDBNull(7) ? null : reader.GetString(7)
+                });
+            }
+        }
+    }
+    return Results.Ok(prices);
+});
+
+app.MapPut("/api/prices/{id}", async (int id, System.Text.Json.JsonElement payload) =>
+{
+    decimal newPrice = payload.GetProperty("price").GetDecimal();
+    string effectiveFromStr = payload.GetProperty("effectiveFrom").GetString();
+    string effectiveToStr = payload.TryGetProperty("effectiveTo", out var t) && t.ValueKind != System.Text.Json.JsonValueKind.Null ? t.GetString() : null;
+    
+    using (var conn = new Microsoft.Data.SqlClient.SqlConnection(GetConnectionString()))
+    {
+        await conn.OpenAsync();
+        
+        // 1. Get old record
+        string getOldSql = "SELECT ERP_CODE, PriceType, UOM, EffectiveFrom FROM PriceMaster WHERE PriceID = @Id";
+        string erpCode = "", priceType = "", uom = "";
+        using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(getOldSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@Id", id);
+            using (var reader = await cmd.ExecuteReaderAsync())
+            {
+                if (await reader.ReadAsync())
+                {
+                    erpCode = reader.GetString(0);
+                    priceType = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                    uom = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                }
+                else 
+                {
+                    return Results.NotFound("Price not found");
+                }
+            }
+        }
+
+        using (var transaction = conn.BeginTransaction())
+        {
+            try 
+            {
+                // 2. Close old record
+                string updateOld = "UPDATE PriceMaster SET EffectiveTo = DATEADD(day, -1, @NewFrom) WHERE PriceID = @Id";
+                using (var cmdUpdate = new Microsoft.Data.SqlClient.SqlCommand(updateOld, conn, transaction))
+                {
+                    cmdUpdate.Parameters.AddWithValue("@NewFrom", effectiveFromStr);
+                    cmdUpdate.Parameters.AddWithValue("@Id", id);
+                    await cmdUpdate.ExecuteNonQueryAsync();
+                }
+
+                // 3. Insert new record
+                string insertNew = @"INSERT INTO PriceMaster (ERP_CODE, PriceType, Price, UOM, EffectiveFrom, EffectiveTo) 
+                                     VALUES (@Erp, @Type, @Price, @Uom, @From, @To)";
+                using (var cmdInsert = new Microsoft.Data.SqlClient.SqlCommand(insertNew, conn, transaction))
+                {
+                    cmdInsert.Parameters.AddWithValue("@Erp", erpCode);
+                    cmdInsert.Parameters.AddWithValue("@Type", priceType);
+                    cmdInsert.Parameters.AddWithValue("@Price", newPrice);
+                    cmdInsert.Parameters.AddWithValue("@Uom", uom);
+                    cmdInsert.Parameters.AddWithValue("@From", effectiveFromStr);
+                    if (string.IsNullOrEmpty(effectiveToStr))
+                        cmdInsert.Parameters.AddWithValue("@To", DBNull.Value);
+                    else
+                        cmdInsert.Parameters.AddWithValue("@To", effectiveToStr);
+                    await cmdInsert.ExecuteNonQueryAsync();
+                }
+                
+                transaction.Commit();
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                return Results.Problem(ex.Message);
+            }
+        }
+    }
+    return Results.Ok();
+});
+
+app.MapPost("/api/prices/upload", async (Microsoft.AspNetCore.Http.HttpRequest request) =>
+{
+    if (!request.HasFormContentType) return Results.BadRequest("Expected form data.");
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("file");
+    if (file == null || file.Length == 0) return Results.BadRequest("No file uploaded.");
+    
+    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "temp_upload.xlsx");
+    using (var stream = new FileStream(filePath, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
+    }
+    
+    // Execute python script
+    var process = new System.Diagnostics.Process();
+    process.StartInfo.FileName = "python";
+    process.StartInfo.Arguments = $"import_prices.py \"{filePath}\"";
+    process.StartInfo.RedirectStandardOutput = true;
+    process.StartInfo.RedirectStandardError = true;
+    process.StartInfo.UseShellExecute = false;
+    process.Start();
+    string output = process.StandardOutput.ReadToEnd();
+    string err = process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    
+    if (process.ExitCode != 0)
+    {
+        return Results.Problem($"Failed to import: {err}");
+    }
+    
+    return Results.Ok(new { message = "Import successful", output = output });
+});
+
 app.Run();
+
 
 // ==========================================================================
 // DTO DEFINITIONS FOR SERIALIZATION
@@ -1245,6 +1503,11 @@ public class RejectOrderRequestDto
 {
     public string ApproverCode { get; set; } = "";
     public string Reason { get; set; } = "";
+}
+
+public class UpdateSettingsRequest
+{
+    public bool RestrictMultipleRoutes { get; set; }
 }
 
 public class OrderItemDto

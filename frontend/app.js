@@ -53,6 +53,7 @@ const FALLBACK_CUSTOMERS = [
 let currentSalesperson = "";
 let currentSalespersonCode = "";
 let currentPriceType = "REGULAR";
+let currentFocEligibleItems = [];
 let orders = [];
 let currentEditingId = null;
 let deleteTargetId = null;
@@ -359,13 +360,36 @@ function completeLogin(code, name, route) {
     document.getElementById("appContainer").style.display = "block";
     userProfile.style.display = "flex";
     lblLoggedUser.textContent = `${name} (${code})`;
+    const loggedUserType = (localStorage.getItem("loggedUserType") || "Salesman").trim().toLowerCase();
+    
     if (lblLoggedRoute) {
-        lblLoggedRoute.textContent = route ? route : "No Route Assigned";
+        if (loggedUserType !== 'salesman') {
+            lblLoggedRoute.style.display = 'none';
+        } else {
+            lblLoggedRoute.style.display = 'block';
+            lblLoggedRoute.textContent = route ? route : "No Route Assigned";
+        }
     }
     
-    // Reload orders and customer dropdown now that the user context is established
-    loadOrdersFromSource();
-    populateCustomerDropdown(code);
+    if (loggedUserType === 'admin') {
+        showView('adminLayout');
+        
+        // Fetch Admin Settings
+        if (isBackendConnected) {
+            fetch(`${API_BASE_URL}/settings`)
+                .then(res => res.json())
+                .then(data => {
+                    const chk = document.getElementById('chkRestrictRoutes');
+                    if (chk) chk.checked = data.restrictMultipleRoutes;
+                }).catch(err => console.error("Error loading settings", err));
+        }
+        
+    } else {
+        showView('dashboard');
+        // Reload orders and customer dropdown now that the user context is established
+        loadOrdersFromSource();
+        populateCustomerDropdown(code);
+    }
 }
 
 async function populateCustomerDropdown(spCode) {
@@ -468,24 +492,31 @@ function setupEventListeners() {
         showView("form");
     });
     
-    btnManageMappings.addEventListener("click", () => {
-        showView("mappings");
-        loadMappingsTable();
-    });
-
     document.querySelectorAll(".btnBackToDashboard").forEach(btn => {
         btn.addEventListener("click", () => showView("dashboard"));
     });
 
     // Customer dropdown change listener
-    customerNameInput.addEventListener("change", (e) => {
+    customerNameInput.addEventListener("change", async (e) => {
         const selectedOption = customerNameInput.options[customerNameInput.selectedIndex];
         if (selectedOption && selectedOption.dataset.code) {
             customerCodeInput.value = selectedOption.dataset.code;
             currentPriceType = selectedOption.dataset.priceType || "REGULAR";
+            
+            try {
+                const focRes = await fetch(`${API_BASE_URL}/foc-eligibility/${selectedOption.dataset.code}`);
+                if(focRes.ok) {
+                    currentFocEligibleItems = await focRes.json();
+                } else {
+                    currentFocEligibleItems = [];
+                }
+            } catch(e) {
+                currentFocEligibleItems = [];
+            }
         } else {
             customerCodeInput.value = "";
             currentPriceType = "REGULAR";
+            currentFocEligibleItems = [];
         }
         updateCatalogPricing(currentPriceType);
         renderMaterialFormRows();
@@ -687,7 +718,9 @@ function renderMaterialFormRows() {
             </td>
             <td class="col-foc">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <input type="checkbox" class="foc-enable-chk" data-no="${material.no}" title="Enable FOC">
+                    ${currentFocEligibleItems.includes(material.code) ? 
+                    `<input type="checkbox" class="foc-enable-chk" data-no="${material.no}" title="Enable FOC">` : 
+                    `<input type="checkbox" class="foc-enable-chk" data-no="${material.no}" title="Not eligible for FOC" disabled>`}
                     <input type="number" min="0" class="form-control foc-input" style="text-align: center;" placeholder="0" data-no="${material.no}" readonly>
                 </div>
             </td>
@@ -879,6 +912,9 @@ async function addMapping() {
             mappingSalespersonInput.value = "";
             mappingSalesPNCode.value = "";
             loadMappingsTable();
+        }
+        if (typeof loadPricesTable === 'function') {
+            loadPricesTable();
         } else {
             const err = await res.text();
             alert("Failed to add mapping: " + err);
@@ -895,6 +931,9 @@ async function deleteMapping(id) {
         const res = await fetch(`${API_BASE_URL}/mappings/${id}`, { method: "DELETE" });
         if (res.ok) {
             loadMappingsTable();
+        }
+        if (typeof loadPricesTable === 'function') {
+            loadPricesTable();
         } else {
             alert("Failed to delete mapping.");
         }
@@ -969,7 +1008,8 @@ function showView(viewName) {
     viewDashboard.classList.remove("active");
     viewOrderForm.classList.remove("active");
     viewMemo.classList.remove("active");
-    viewMappings.classList.remove("active");
+    const viewAdminLayout = document.getElementById("viewAdminLayout");
+    if (viewAdminLayout) viewAdminLayout.classList.remove("active");
     
     if (viewName === "dashboard") {
         loadOrdersFromSource();
@@ -987,9 +1027,17 @@ function showView(viewName) {
     } else if (viewName === "memo") {
         viewMemo.classList.add("active");
         window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (viewName === "mappings") {
-        viewMappings.classList.add("active");
+    } else if (viewName === "adminLayout") {
+        if (viewAdminLayout) viewAdminLayout.classList.add("active");
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        // Load mappings data if it exists
+        if (typeof loadMappingsTable === 'function') {
+            loadMappingsTable();
+        }
+        if (typeof loadPricesTable === 'function') {
+            loadPricesTable();
+        }
     }
 }
 
@@ -1342,6 +1390,18 @@ async function editOrder(orderId) {
     // Update price type and refresh catalog
     const option = Array.from(customerNameInput.options).find(opt => opt.dataset.code === order.customerCode);
     currentPriceType = option ? (option.dataset.priceType || "REGULAR") : "REGULAR";
+    
+    try {
+        const focRes = await fetch(`${API_BASE_URL}/foc-eligibility/${order.customerCode}`);
+        if(focRes.ok) {
+            currentFocEligibleItems = await focRes.json();
+        } else {
+            currentFocEligibleItems = [];
+        }
+    } catch(e) {
+        currentFocEligibleItems = [];
+    }
+    
     updateCatalogPricing(currentPriceType);
     renderMaterialFormRows();
     
@@ -1730,3 +1790,388 @@ function handleDashboardSearch() {
 window.viewOrderDetails = viewOrderDetails;
 window.editOrder = editOrder;
 window.confirmDeleteOrder = confirmDeleteOrder;
+
+// ==========================================
+// ADMIN DASHBOARD SETTINGS
+// ==========================================
+const chkRestrictRoutes = document.getElementById("chkRestrictRoutes");
+if (chkRestrictRoutes) {
+    chkRestrictRoutes.addEventListener('change', async (e) => {
+        if (isBackendConnected) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/settings`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ RestrictMultipleRoutes: e.target.checked })
+                });
+                if (!res.ok) {
+                    alert("Failed to update setting");
+                }
+            } catch(ex) {
+                console.error("Failed to update settings", ex);
+                alert("Error updating settings");
+            }
+        }
+    });
+}
+
+// ==========================================
+// ADMIN SIDEBAR NAVIGATION
+// ==========================================
+const adminNavLinks = document.querySelectorAll('.admin-nav-link:not(.disabled)');
+adminNavLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // Remove active from all links and tabs
+        adminNavLinks.forEach(l => l.classList.remove('active'));
+        document.querySelectorAll('.admin-tab-pane').forEach(p => p.classList.remove('active'));
+        
+        // Add active to clicked link
+        link.classList.add('active');
+        
+        // Show target tab
+        const targetTab = document.getElementById(link.getAttribute('data-tab'));
+        if (targetTab) {
+            targetTab.classList.add('active');
+        }
+    });
+});
+
+
+// ==========================================
+// PRICE MAPPING LOGIC
+// ==========================================
+const pricesTableBody = document.getElementById("pricesTableBody");
+
+
+let currentPrices = [];
+
+async function loadPricesTable() {
+    if (!pricesTableBody) return;
+    pricesTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> Loading prices...</td></tr>`;
+    
+    if (!isBackendConnected) {
+        pricesTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Requires backend connection.</td></tr>`;
+        return;
+    }
+    
+    try {
+        const res = await fetch(`${API_BASE_URL}/prices`);
+        if (res.ok) {
+            currentPrices = await res.json();
+            renderPricesTable();
+        } else {
+            pricesTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color: red;">Failed to load prices.</td></tr>`;
+        }
+    } catch(e) {
+        console.error("Error loading prices", e);
+        pricesTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color: red;">Error connecting to server.</td></tr>`;
+    }
+}
+
+function renderPricesTable() {
+    if (!pricesTableBody) return;
+    pricesTableBody.innerHTML = "";
+    if (!currentPrices || currentPrices.length === 0) {
+        pricesTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No prices found.</td></tr>`;
+        return;
+    }
+    
+    currentPrices.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${p.erpCode}</td>
+            <td>${p.itemName}</td>
+            <td>${p.priceType}</td>
+            <td style="font-weight:600;">${p.price.toFixed(2)}</td>
+            <td>${p.uom}</td>
+            <td>${p.effectiveFrom || 'N/A'}</td>
+            <td>${p.effectiveTo || '-'}</td>
+            <td style="text-align:center;">
+                <button type="button" style="background: transparent; border: none; color: var(--primary-color); box-shadow: none; cursor: pointer; padding: 4px;" onclick="openEditPriceModal(${p.id})" title="Edit Price">
+                    <i class="fa-solid fa-pen-to-square" style="font-size: 16px;"></i>
+                </button>
+            </td>
+        `;
+        pricesTableBody.appendChild(tr);
+    });
+}
+
+window.openEditPriceModal = function(id) {
+    const priceObj = currentPrices.find(p => p.id === id);
+    if (!priceObj) return;
+    
+    document.getElementById("editPriceId").value = id;
+    document.getElementById("editPriceItemName").textContent = `${priceObj.itemName} (${priceObj.erpCode})`;
+    document.getElementById("editPriceCurrentValue").textContent = `${priceObj.price.toFixed(2)} QAR (${priceObj.priceType})`;
+    
+    document.getElementById("editNewPrice").value = priceObj.price;
+    document.getElementById("editEffectiveFrom").value = new Date().toISOString().split('T')[0];
+    document.getElementById("editEffectiveTo").value = "";
+    
+    document.getElementById("editPriceError").style.display = 'none';
+    document.getElementById("editPriceModal").classList.add('active');
+};
+
+document.addEventListener("click", async (e) => {
+    if (e.target && e.target.id === "btnSavePrice") {
+        const btnSavePrice = e.target;
+        const editPriceError = document.getElementById("editPriceError");
+        const editPriceModal = document.getElementById("editPriceModal");
+        const id = document.getElementById("editPriceId").value;
+        const newPrice = document.getElementById("editNewPrice").value;
+        const fromDate = document.getElementById("editEffectiveFrom").value;
+        const toDate = document.getElementById("editEffectiveTo").value;
+        
+        if (!newPrice || !fromDate) {
+            editPriceError.textContent = "Price and Effective From date are required.";
+            editPriceError.style.display = 'block';
+            return;
+        }
+        
+        btnSavePrice.disabled = true;
+        btnSavePrice.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/prices/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    price: parseFloat(newPrice),
+                    effectiveFrom: fromDate,
+                    effectiveTo: toDate || null
+                })
+            });
+            
+            if (res.ok) {
+                editPriceModal.classList.remove('active');
+                if (typeof loadPricesTable === 'function') loadPricesTable(); 
+            } else {
+                const err = await res.text();
+                editPriceError.textContent = "Error: " + err;
+                editPriceError.style.display = 'block';
+            }
+        } catch(err) {
+            editPriceError.textContent = "Network error.";
+            editPriceError.style.display = 'block';
+        } finally {
+            btnSavePrice.disabled = false;
+            btnSavePrice.innerHTML = 'Save Changes';
+        }
+    }
+});
+
+
+// File Upload Logic
+const priceMasterUpload = document.getElementById("priceMasterUpload");
+const btnUploadPriceMaster = document.getElementById("btnUploadPriceMaster");
+
+if (priceMasterUpload) {
+    priceMasterUpload.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        btnUploadPriceMaster.disabled = true;
+        btnUploadPriceMaster.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+        
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/prices/upload`, {
+                method: "POST",
+                body: formData
+            });
+            if (res.ok) {
+                alert("Prices imported successfully!");
+                loadPricesTable();
+            } else {
+                const err = await res.text();
+                alert("Failed to upload: " + err);
+            }
+        } catch(err) {
+            alert("Network error during upload.");
+        } finally {
+            btnUploadPriceMaster.disabled = false;
+            btnUploadPriceMaster.innerHTML = '<i class="fa-solid fa-upload"></i> Upload Price Master';
+            priceMasterUpload.value = "";
+        }
+    });
+}
+
+
+// ==========================================
+// PRICE MASTER UPLOAD
+// ==========================================
+document.addEventListener("DOMContentLoaded", () => {
+    const fileInput = document.getElementById("priceMasterUpload");
+    if (fileInput) {
+        fileInput.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Show loading state
+            const btn = document.getElementById("btnUploadPriceMaster");
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+            btn.disabled = true;
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            
+            try {
+                const res = await fetch(`${API_BASE_URL}/prices/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (res.ok) {
+                    alert("Price Master uploaded successfully!");
+                    if (typeof loadPricesTable === 'function') loadPricesTable();
+                } else {
+                    const err = await res.text();
+                    alert("Error uploading file: " + err);
+                }
+            } catch (err) {
+                console.error("Upload failed", err);
+                alert("Failed to upload the file. Network error.");
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                fileInput.value = ""; // Reset input
+            }
+        });
+    }
+})
+// ==========================================
+// GLOBAL TABLE CONTROLS (Search, Print, Export, Pagination)
+// ==========================================
+window.paginateTable = function(table, toolbar) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    const limitSelect = toolbar.querySelector('.filter-select');
+    const limit = limitSelect ? parseInt(limitSelect.value) : 25;
+    const page = table.currentPage || 1;
+    
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const visibleRows = rows.filter(r => r.dataset.searchVisible !== 'false');
+    
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    
+    rows.forEach(row => {
+        row.style.display = 'none'; // hide all first
+    });
+    
+    visibleRows.slice(startIndex, endIndex).forEach(row => {
+        row.style.display = '';
+    });
+    
+    // Render controls
+    let paginationContainer = table.nextElementSibling;
+    if (!paginationContainer || !paginationContainer.classList.contains('pagination-controls')) {
+        paginationContainer = document.createElement('div');
+        paginationContainer.className = 'pagination-controls';
+        paginationContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 15px 0; color: #64748b; font-size: 13px;';
+        table.parentNode.insertBefore(paginationContainer, table.nextSibling);
+    }
+    
+    const totalPages = Math.ceil(visibleRows.length / limit) || 1;
+    const startCount = visibleRows.length === 0 ? 0 : startIndex + 1;
+    const endCount = Math.min(endIndex, visibleRows.length);
+    
+    paginationContainer.innerHTML = `
+        <div>Showing ${startCount} to ${endCount} of ${visibleRows.length} items</div>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn-page btn-prev" style="padding: 6px 12px; border: 1px solid #e2e8f0; background: ${page === 1 ? '#f8fafc' : 'white'}; color: ${page === 1 ? '#94a3b8' : '#334155'}; border-radius: 4px; cursor: ${page === 1 ? 'default' : 'pointer'};">Previous</button>
+            <div style="padding: 6px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; font-weight: 600;">${page}</div>
+            <button class="btn-page btn-next" style="padding: 6px 12px; border: 1px solid #e2e8f0; background: ${page === totalPages ? '#f8fafc' : 'white'}; color: ${page === totalPages ? '#94a3b8' : '#334155'}; border-radius: 4px; cursor: ${page === totalPages ? 'default' : 'pointer'};">Next</button>
+        </div>
+    `;
+    
+    const btnPrev = paginationContainer.querySelector('.btn-prev');
+    const btnNext = paginationContainer.querySelector('.btn-next');
+    
+    if (page > 1) {
+        btnPrev.addEventListener('click', () => { table.currentPage--; window.paginateTable(table, toolbar); });
+    }
+    if (page < totalPages) {
+        btnNext.addEventListener('click', () => { table.currentPage++; window.paginateTable(table, toolbar); });
+    }
+};
+
+window.setupGlobalTables = function() {
+    document.querySelectorAll('.table-borderless-list').forEach(table => {
+        const toolbar = table.previousElementSibling;
+        if (!toolbar || !toolbar.classList.contains('toolbar-controls')) return;
+        
+        table.currentPage = 1;
+        
+        // Search Filtering
+        const searchInput = toolbar.querySelector('.search-input');
+        if (searchInput && !searchInput.dataset.bound) {
+            searchInput.dataset.bound = true;
+            searchInput.addEventListener('keyup', function() {
+                const filter = this.value.toLowerCase();
+                const tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                
+                const rows = tbody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.dataset.searchVisible = text.includes(filter) ? 'true' : 'false';
+                });
+                table.currentPage = 1;
+                window.paginateTable(table, toolbar);
+            });
+        }
+        
+        // Limit Change
+        const limitSelect = toolbar.querySelector('.filter-select');
+        if (limitSelect && !limitSelect.dataset.bound) {
+            limitSelect.dataset.bound = true;
+            limitSelect.addEventListener('change', function() {
+                table.currentPage = 1;
+                window.paginateTable(table, toolbar);
+            });
+        }
+        
+        // Initial pagination
+        window.paginateTable(table, toolbar);
+    });
+    
+    // Print/Export
+    document.querySelectorAll('.btn-toolbar').forEach(btn => {
+        if (!btn.dataset.bound) {
+            btn.dataset.bound = true;
+            if (btn.textContent.includes('Print')) {
+                btn.addEventListener('click', () => window.print());
+            }
+            if (btn.textContent.includes('Export')) {
+                btn.addEventListener('click', function() {
+                    alert("Export to CSV functionality would trigger here.");
+                });
+            }
+        }
+    });
+};
+
+// We will setup mutation observer to automatically setup tables when their tbodys are populated!
+const observer = new MutationObserver(mutations => {
+    let shouldSetup = false;
+    mutations.forEach(m => {
+        if (m.addedNodes.length > 0 && m.target.tagName === 'TBODY') {
+            shouldSetup = true;
+        }
+    });
+    if (shouldSetup) {
+        window.setupGlobalTables();
+    }
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+document.addEventListener("DOMContentLoaded", () => {
+    window.setupGlobalTables();
+});
