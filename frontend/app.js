@@ -1079,6 +1079,9 @@ function renderOrdersList(orderList) {
     if (loggedUserType === 'supervisor') {
         pendingOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() === 'pending' && o.approver && String(o.approver).trim() === loggedSalespersonCode);
         mainOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() !== 'rejected' && String(o.status).trim().toLowerCase() !== 'pending');
+    } else if (loggedUserType === 'manager') {
+        pendingOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() === 'pending');
+        mainOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() !== 'rejected' && String(o.status).trim().toLowerCase() !== 'pending');
     } else {
         pendingOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() === 'pending' && o.salesPNCode && String(o.salesPNCode).trim() === loggedSalespersonCode);
         mainOrders = orderList.filter(o => o && o.status && String(o.status).trim().toLowerCase() !== 'rejected' && String(o.status).trim().toLowerCase() !== 'pending');
@@ -1131,7 +1134,7 @@ function renderOrderRow(order, tbody, isReturnedTable) {
         
         let approveBtn = '';
         let rejectBtn = '';
-        if (loggedUserType === 'supervisor' && order.status && order.status.trim().toLowerCase() === 'pending' && order.approver && order.approver.trim() === loggedSalespersonCode) {
+        if (order.status && order.status.trim().toLowerCase() === 'pending' && ((loggedUserType === 'supervisor' && order.approver && order.approver.trim() === loggedSalespersonCode) || (loggedUserType === 'manager'))) {
             approveBtn = `<button class="btn btn-success btn-sm" onclick="approveOrder('${order.id}')" title="Approve Order" style="margin-left: 5px;">
                 <i class="fa-solid fa-check"></i> Approve
             </button>`;
@@ -1528,7 +1531,7 @@ async function viewOrderDetails(orderId) {
     let buttonsHtml = '';
     
     // Manage bottom approval section
-    if (loggedUserType === 'supervisor' && order.status && order.status.trim().toLowerCase() === 'pending' && order.approver && order.approver.trim() === loggedSalespersonCode) {
+    if (order.status && order.status.trim().toLowerCase() === 'pending' && ((loggedUserType === 'supervisor' && order.approver && order.approver.trim() === loggedSalespersonCode) || (loggedUserType === 'manager'))) {
         approvalSection.style.display = 'block';
         approvalComment.value = ""; // Clear any previous comment
         
@@ -1641,7 +1644,7 @@ async function approveOrder(orderId, reason = "") {
     
     const approverCode = localStorage.getItem("loggedSalespersonCode");
     if (!approverCode) {
-        alert("You must be logged in as a supervisor to approve orders.");
+        alert("You must be logged in as a supervisor or manager to approve orders.");
         return;
     }
 
@@ -1691,7 +1694,7 @@ async function rejectOrder(orderId, providedReason = null) {
     
     const approverCode = localStorage.getItem("loggedSalespersonCode");
     if (!approverCode) {
-        alert("You must be logged in as a supervisor to reject orders.");
+        alert("You must be logged in as a supervisor or manager to reject orders.");
         return;
     }
 
