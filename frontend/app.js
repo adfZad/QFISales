@@ -1155,7 +1155,7 @@ function renderOrderRow(order, tbody, isReturnedTable) {
                 <div style="font-weight: 700; color: var(--text-dark);">${order.customerName}</div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">By: ${order.salesPerson || 'Salesman'}</div>
             </td>
-            <td>
+            <td style="text-align: center;">
                 <span style="background: rgba(46, 204, 113, 0.2); color: var(--color-success); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">
                     ${order.paymentMode}
                 </span>
@@ -1169,7 +1169,7 @@ function renderOrderRow(order, tbody, isReturnedTable) {
             <td style="text-align: center;">
                 <div class="actions-cell" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
                     <button class="btn btn-secondary btn-sm" onclick="viewOrderDetails('${order.id}')" title="View Printable Order">
-                        <i class="fa-solid fa-eye"></i> View
+                        <i class="fa-solid fa-eye"></i>
                     </button>
                     ${editBtn}
                     ${approveBtn}
@@ -1517,6 +1517,14 @@ async function viewOrderDetails(orderId) {
     viewTotalQty.textContent = order.totalQty;
     viewTotalFoc.textContent = order.totalFoc;
     viewNetAmount.textContent = order.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    document.getElementById("viewCreatedBy").innerHTML = `<strong>Created By:</strong> ${order.salesPerson || '-'} (${order.salesPNCode || '-'})`;
+    if (order.status && (order.status.trim().toLowerCase() === 'approved' || order.status.trim().toLowerCase() === 'rejected')) {
+        const verb = order.status.trim().toLowerCase() === 'approved' ? 'Approved' : 'Rejected';
+        document.getElementById("viewApprovedBy").innerHTML = `<strong>${verb} By:</strong> ${order.approverName || 'Management'} (${order.approver || '-'})`;
+    } else {
+        document.getElementById("viewApprovedBy").innerHTML = `<strong>Approved By:</strong> <span style="color:#e67e22;">Pending</span>`;
+    }
     
     // Manage Viewer Buttons
     const viewerActionButtons = document.getElementById("viewerActionButtons");
@@ -2086,7 +2094,7 @@ window.paginateTable = function(table, toolbar) {
     const endCount = Math.min(endIndex, visibleRows.length);
     
     paginationContainer.innerHTML = `
-        <div>Showing ${startCount} to ${endCount} of ${visibleRows.length} items</div>
+        <div>${startCount} to ${endCount} of ${visibleRows.length} items</div>
         <div style="display: flex; gap: 8px;">
             <button class="btn-page btn-prev" style="padding: 6px 12px; border: 1px solid #e2e8f0; background: ${page === 1 ? '#f8fafc' : 'white'}; color: ${page === 1 ? '#94a3b8' : '#334155'}; border-radius: 4px; cursor: ${page === 1 ? 'default' : 'pointer'};">Previous</button>
             <div style="padding: 6px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; font-weight: 600;">${page}</div>

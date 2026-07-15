@@ -551,17 +551,17 @@ app.MapGet("/api/orders", async (HttpContext context) =>
             {
                 await conn.OpenAsync();
                 // Fetch OrderHeaders from database
-                string sql = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason, RequiredDate, ReferenceNumber FROM OrderHeader";
+                string sql = "SELECT o.OrderID, o.OrderNumber, o.OrderDate, o.CustomerName, o.CustomerCode, o.PaymentMode, o.SalesPerson, o.SalesPNCode, o.TotalQty, o.TotalFOC, o.TotalAmount, o.IsCreditVerified, o.Approver, o.Status, o.RejectReason, o.RequiredDate, o.ReferenceNumber, a.SalespersonName as ApproverName FROM OrderHeader o LEFT JOIN [Salesperson Master] a ON o.Approver = a.[ERP EMP CODE]";
                 if (!string.IsNullOrEmpty(salesPersonCode))
                 {
                     if (userType.Equals("Supervisor", StringComparison.OrdinalIgnoreCase))
-                        sql += " WHERE SalesPNCode = @spCode OR Approver = @spCode OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Supervisor ERP EMP CODE] = @spCode)";
+                        sql += " WHERE o.SalesPNCode = @spCode OR o.Approver = @spCode OR o.SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Supervisor ERP EMP CODE] = @spCode)";
                     else if (userType.Equals("Manager", StringComparison.OrdinalIgnoreCase))
-                        sql += " WHERE SalesPNCode = @spCode OR Approver = @spCode OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @spCode)";
+                        sql += " WHERE o.SalesPNCode = @spCode OR o.Approver = @spCode OR o.SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @spCode)";
                     else
-                        sql += " WHERE SalesPNCode = @spCode";
+                        sql += " WHERE o.SalesPNCode = @spCode";
                 }
-                sql += " ORDER BY OrderID DESC";
+                sql += " ORDER BY o.OrderID DESC";
                 using var cmd = new SqlCommand(sql, conn);
                 if (!string.IsNullOrEmpty(salesPersonCode))
                 {
@@ -585,6 +585,7 @@ app.MapGet("/api/orders", async (HttpContext context) =>
                         TotalAmount = Convert.ToDecimal(reader["TotalAmount"]),
                         IsCreditVerified = Convert.ToBoolean(reader["IsCreditVerified"]),
                         Approver = reader["Approver"]?.ToString(),
+                        ApproverName = reader["ApproverName"]?.ToString(),
                         Status = reader["Status"]?.ToString() ?? "Pending",
                         RejectReason = reader["RejectReason"]?.ToString(),
                         RequiredDate = reader["RequiredDate"] != DBNull.Value ? Convert.ToDateTime(reader["RequiredDate"]).ToString("yyyy-MM-dd") : "",
@@ -619,7 +620,7 @@ app.MapGet("/api/orders/{id}", async (string id) =>
                 await conn.OpenAsync();
                 
                 // Fetch Header
-                string sqlHeader = "SELECT OrderID, OrderNumber, OrderDate, CustomerName, CustomerCode, PaymentMode, SalesPerson, SalesPNCode, TotalQty, TotalFOC, TotalAmount, IsCreditVerified, Approver, Status, RejectReason, RequiredDate, ReferenceNumber FROM OrderHeader WHERE OrderID = @id";
+                string sqlHeader = "SELECT o.OrderID, o.OrderNumber, o.OrderDate, o.CustomerName, o.CustomerCode, o.PaymentMode, o.SalesPerson, o.SalesPNCode, o.TotalQty, o.TotalFOC, o.TotalAmount, o.IsCreditVerified, o.Approver, o.Status, o.RejectReason, o.RequiredDate, o.ReferenceNumber, a.SalespersonName as ApproverName FROM OrderHeader o LEFT JOIN [Salesperson Master] a ON o.Approver = a.[ERP EMP CODE] WHERE o.OrderID = @id";
                 using (var cmdHeader = new SqlCommand(sqlHeader, conn))
                 {
                     cmdHeader.Parameters.AddWithValue("@id", numericId);
@@ -641,6 +642,7 @@ app.MapGet("/api/orders/{id}", async (string id) =>
                             TotalAmount = Convert.ToDecimal(reader["TotalAmount"]),
                             IsCreditVerified = Convert.ToBoolean(reader["IsCreditVerified"]),
                             Approver = reader["Approver"]?.ToString(),
+                            ApproverName = reader["ApproverName"]?.ToString(),
                             Status = reader["Status"]?.ToString() ?? "Pending",
                             RejectReason = reader["RejectReason"]?.ToString(),
                             RequiredDate = reader["RequiredDate"] != DBNull.Value ? Convert.ToDateTime(reader["RequiredDate"]).ToString("yyyy-MM-dd") : "",
@@ -986,7 +988,7 @@ app.MapPut("/api/orders/{id}/approve", async (string id, ApproveOrderRequestDto 
             using (var conn = new SqlConnection(connStr))
             {
                 await conn.OpenAsync();
-                string sql = "UPDATE OrderHeader SET Status = 'Approved', RejectReason = @reason WHERE OrderID = @id AND (Approver = @approver OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @approver OR [Supervisor ERP EMP CODE] = @approver))";
+                string sql = "UPDATE OrderHeader SET Status = 'Approved', RejectReason = @reason, Approver = @approver WHERE OrderID = @id AND (Approver = @approver OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @approver OR [Supervisor ERP EMP CODE] = @approver))";
                 using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@id", numericId);
                 cmd.Parameters.AddWithValue("@approver", req.ApproverCode);
@@ -1019,7 +1021,7 @@ app.MapPut("/api/orders/{id}/reject", async (string id, RejectOrderRequestDto re
             using (var conn = new SqlConnection(connStr))
             {
                 await conn.OpenAsync();
-                string sql = "UPDATE OrderHeader SET Status = 'Rejected', RejectReason = @reason WHERE OrderID = @id AND (Approver = @approver OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @approver OR [Supervisor ERP EMP CODE] = @approver))";
+                string sql = "UPDATE OrderHeader SET Status = 'Rejected', RejectReason = @reason, Approver = @approver WHERE OrderID = @id AND (Approver = @approver OR SalesPNCode IN (SELECT [ERP EMP CODE] FROM [Salesperson Master] WHERE [Manager ERP EMP CODE] = @approver OR [Supervisor ERP EMP CODE] = @approver))";
                 using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@id", numericId);
                 cmd.Parameters.AddWithValue("@approver", req.ApproverCode);
@@ -1486,6 +1488,7 @@ public class OrderDto
     public decimal TotalAmount { get; set; }
     public bool IsCreditVerified { get; set; }
     public string? Approver { get; set; }
+    public string? ApproverName { get; set; }
     public string Status { get; set; } = "Pending";
     public string? RejectReason { get; set; }
     public string RequiredDate { get; set; } = "";
